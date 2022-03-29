@@ -10,3 +10,9 @@ outputs/
 #No training information
 runs/
 results/
+
+#ignore pyc files
+.pyc
+
+#ignore cesvima out files
+slurm-*
