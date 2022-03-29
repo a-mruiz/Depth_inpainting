@@ -1,0 +1,12 @@
+#No images allowed
+.png
+
+#No data training
+data_middlebury/
+
+#No outputs from training
+outputs/
+
+#No training information
+runs/
+results/

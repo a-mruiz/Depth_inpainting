@@ -1,0 +1,178 @@
+import torch
+import time
+from tqdm import tqdm
+from helpers.helper import save_result_row, save_result_individual
+from torch.profiler import profile, record_function, ProfilerActivity
+from pynvml import *
+import torch.nn.functional as F
+import numpy as np
+import imageio
+import helpers.losses as losses
+
+
+def train_model(model, epochs, params, optimizer, logger, loader, loader_val, criterion, device, lr_scheduler,writer):
+    """
+    Train the model 
+    """
+
+    # Empty cache on the GPU...just in case some more Mb appear
+    
+    val_psnr=0
+
+    for epoch in range(epochs):
+        torch.cuda.empty_cache()
+        print("------------EPOCH ("+str(epoch+1) +") of ("+str(epochs)+")------------")
+        losses_batch, psnr_batch, gpu_time = train_one_epoch(
+            model, optimizer, loader, criterion, logger, epoch,device,writer)
+
+        """log all the training!!!"""
+        writer.add_scalar("Train Loss- EPOCH", sum(losses_batch)/len(losses_batch))
+        writer.add_scalar("Train PSNR(dB)- EPOCH", -sum(psnr_batch)/len(psnr_batch))
+        print("end epoch")
+        
+        #Starting evaluation routine
+        with torch.no_grad():
+            model.eval()
+            val_losses=[]
+            val_psnrs=[]
+            for i,batch_data in enumerate(loader_val):
+                batch_data = {
+                    key: val.to(device) for key, val in batch_data.items() if val is not None
+                }
+                output=model(batch_data)
+                        
+                #print(f"\nLimits Output Depth low ({torch.min(output)} and high ({torch.max(output)}))")
+                #print(f"Limits Output GT low ({torch.min(batch_data['gt'])} and high ({torch.max(batch_data['gt'])}))")
+                val_current_loss = criterion(output, batch_data['gt']).item()
+                val_current_psnr = losses.psnr_loss(output, batch_data['gt']).item()
+                val_losses.append(val_current_loss)
+                val_psnrs.append(val_current_psnr)
+                save_result_row(batch_data, output, "out_"+str(epoch)+".png", folder="outputs/val/middlebury/two/")
+
+            mean_loss_batch = sum(losses_batch)/len(losses_batch)
+            mean_psnr_batch = sum(psnr_batch)/len(psnr_batch)
+
+            val_mean_loss= sum(val_losses)/len(val_losses)
+            val_mean_psnr= sum(val_psnrs)/len(val_psnrs)
+            writer.add_scalar("Val Loss- EPOCH", sum(losses_batch)/len(losses_batch))
+            writer.add_scalar("Val PSNR(dB)- EPOCH", -sum(psnr_batch)/len(psnr_batch))
+            logger.logToFile(epoch, mean_loss_batch, -mean_psnr_batch, gpu_time)
+            logger.logToFile(epoch, val_mean_loss, -val_mean_psnr, gpu_time, False)
+            if -val_mean_psnr>val_psnr:
+                val_psnr=val_mean_psnr
+                torch.save(model.state_dict(), logger.backup_directory+"/model_best.pth")
+                print(val_psnr)
+        #prof.step()
+        #lr_scheduler(mean_loss_batch)
+    
+
+
+
+def train_one_epoch(model, optimizer, loader, criterion, logger, epoch,device,writer):
+    """
+    It will train the model for only one epoch
+    """
+    model.train()
+    t = tqdm(loader, total=int(len(loader)))
+    running_loss = 0.0
+    counter = 0
+    loss_batch = []
+    psnr_batch = []
+    for i, batch_data in enumerate(t):
+        data_start = time.time()
+        batch_data = {
+            key: val.to(device) for key, val in batch_data.items() if val is not None
+        }
+        data_time = time.time() - data_start
+        gpu_time_start = time.time()
+
+        # zero the parameter gradients
+        optimizer.zero_grad()        
+        # forward + backward + optimize
+        output = model(batch_data)
+        loss = criterion(output, batch_data['gt'])
+        loss.backward()
+        optimizer.step()
+
+        gpu_time = time.time()-gpu_time_start
+        #exp_lr_scheduler.step()
+        current_loss = loss.item()
+        loss_batch.append(current_loss)
+
+        current_psnr = losses.psnr_loss(output, batch_data['gt']).item()
+        psnr_batch.append(current_psnr)
+
+        running_loss += current_loss
+        counter += 1
+        t.set_postfix(loss=current_loss)
+        writer.add_scalar("Train Loss- LOOP", current_loss)
+        writer.add_scalar("Train PSNR(dB)- LOOP", -current_psnr)
+        
+    return loss_batch, psnr_batch, gpu_time
+
+
+def test_model(model, loader, criterion, logger, device, folder="outputs/"):
+    model.eval()
+    t = tqdm(loader, total=int(len(loader)))
+    running_loss=0
+    i=0
+    for i, batch_data in enumerate(t):
+        batch_data = {
+            key: val.to(device) for key, val in batch_data.items() if val is not None
+        }
+        gpu_time_start = time.time()
+        with torch.no_grad():
+            output = model(batch_data)
+            """
+            In the case of using TWISE, apply the below function
+            
+            output=smooth2chandep(1-output, {'depth_maxrange':80, 'threshold':100}, device)
+
+
+            out_pred = output.detach().cpu().numpy()
+            out_pred = np.squeeze(out_pred)
+            pred_h, pred_w = np.shape(out_pred)   
+            zero_mtrx = np.zeros((pred_h, pred_w))
+            pred_dep = np.concatenate((zero_mtrx, out_pred))
+            pred_dep_round = np.uint16(pred_dep*256)
+            filename = 'TESTING_'+str(i)+'.png'
+            imageio.imwrite(filename, pred_dep_round)
+            """
+
+
+
+
+            loss = criterion(output, batch_data['gt'])
+            gpu_time = time.time()-gpu_time_start
+            current_loss = loss.item()
+            running_loss +=current_loss
+            t.set_postfix(loss=current_loss)
+            save_result_row(batch_data, output, "out_"+str(i)+".png", folder)
+            save_result_individual(batch_data["rgb"], "rgb",name="rgb_"+str(i)+".png", folder="outputs/test/")
+            save_result_individual(batch_data["d"], "d",name="depth_"+str(i)+".png", folder="outputs/test/")
+            save_result_individual(batch_data["gt"], "gt",name="gt_"+str(i)+".png", folder="outputs/test/")
+            save_result_individual(output, "pred",name="pred_"+str(i)+".png", folder="outputs/test/")
+            
+        #print(batch_data['d'].max())
+        #print(batch_data['d'].min())
+        #depth_mask=batch_data["d"]>2
+        #depth_mask_2=batch_data["d"]<-1.3
+        #depth=batch_data["d"]*depth_mask
+        #depth_2=batch_data["d"]*depth_mask_2
+        #save_result_individual(depth, "d",name="depth_"+str(i)+".png", folder="outputs/test_2/")
+        #save_result_individual(depth_2, "d",name="depth_2_"+str(i)+".png", folder="outputs/test_2/")
+    
+    logger.logToFile(0, running_loss/i, 0, gpu_time, False)
+    return running_loss/(i+1)
+
+
+def smooth2chandep(chan_deps, params = None, device = None):
+    if device is None:
+        device = torch.device("cpu")
+    split_deps = torch.split(chan_deps, 1, 1)        
+    split_deps = list(split_deps)
+
+    alpha = torch.sigmoid(split_deps[2])
+    final_dep = alpha*F.relu(split_deps[0])*params['depth_maxrange'] + (1 - alpha)*F.relu(split_deps[1])*params['depth_maxrange']
+
+    return final_dep
