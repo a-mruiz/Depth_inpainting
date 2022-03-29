@@ -41,7 +41,7 @@ print("===> Using '{}' for computation.".format(device))
 def main():
     
     train_or_test = "train"
-
+    
     print("===> Starting framework...")
     """Some parameters for the model"""
     #weight_decay = 1e-06
@@ -57,7 +57,7 @@ def main():
         lr = [0.01,0.001,0.0001],
         batch_size = [1,8,16],
         low_beta = [0.7,0.9],
-        loss_fun=["CombinedLoss","MaskedMSELoss","BerHuLoss","L2","CombinedNew"],
+        loss_fun=["L1","BerHuLoss","L2","CombinedNew"],
         models=["TwoBranch_newModel","TwoBranch_newModel_in","TwoBranch_newModel_bn"]
     )
     
@@ -97,16 +97,16 @@ def main():
         criterion = loss_fun
         if loss_fun=="CombinedLoss":
             criterion=losses.CombinedLoss()
-        if loss_fun=="MaskedMSELoss":
-            criterion=losses.MaskedMSELoss()
+        if loss_fun=="L1":
+            criterion=losses.MaskedL1Loss()
         if loss_fun=="BerHuLoss":
             criterion=losses.BerHuLoss()
         if loss_fun=="L2":
-            criterion=nn.MSELoss()
+            criterion=losses.MaskedMSELoss()
         if loss_fun=="CombinedNew":
             criterion=losses.CombinedNew()
         comment = f'model={m} batch_size = {batch_size} lr = {lr} low_beta = {low_beta} Loss_fun = {loss_fun}'
-        writer = SummaryWriter(comment=comment)
+        writer = SummaryWriter(log_dir="runs/NORMAL_MODEL/",comment=comment)
         
         total_loss_val=0
         total_loss_mse=0

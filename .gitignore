@@ -12,7 +12,7 @@ runs/
 results/
 
 #ignore pyc files
-.pyc
+*.pyc
 
 #ignore cesvima out files
 slurm-*

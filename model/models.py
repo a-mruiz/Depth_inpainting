@@ -1959,18 +1959,25 @@ class EncDecDropoutFull(nn.Module):
         return out
     
 class HourGlassNetwork(nn.Module):
-    def __init__(self):
+    def __init__(self,mode="Light"):
         super(HourGlassNetwork,self).__init__()
+        
+        self.mode=mode
+        
         #First layer of the network, where the rgb and depth values are introduced
         self.first_layer_rgb=conv3x3_bn_relu(in_channels=3,kernel_size=3,out_channels=32,stride=1, padding=1)
         self.first_layer_depth=conv3x3_bn_relu(in_channels=1,kernel_size=3,out_channels=32,stride=1, padding=1)
         
         self.hourglass_1=HourglassModule(4,64)
-        #self.hourglass_2=HourglassModule(4,64)
-        #self.hourglass_3=HourglassModule(4,64)
-        #self.hourglass_4=HourglassModule(4,64)
+        self.hourglass_2=HourglassModule(4,64)
+        self.hourglass_3=HourglassModule(4,64)
+        self.hourglass_4=HourglassModule(4,64)
+        
+        
+        
         
         self.dec_1=deconv3x3_bn_relu(in_channels=64, out_channels=1, kernel_size=3, padding=1,stride=1,output_padding=0)
+        self.final_sigmoid=nn.Sigmoid()
         init_weights(self)
         
     def forward(self, input):
@@ -1982,14 +1989,16 @@ class HourGlassNetwork(nn.Module):
         encoder_feature_init_depth=self.first_layer_depth(d)
         encoder_feature_init=torch.cat((encoder_feature_init_rgb, encoder_feature_init_depth),1)
         
-        #print(encoder_feature_init.shape)
-        hg=self.hourglass_1(encoder_feature_init)
-        hg=self.hourglass_2(hg)
-        hg=self.hourglass_3(hg)
-        hg=self.hourglass_4(hg)
         
+        if self.mode=="Light":
+            hg=self.hourglass_1(encoder_feature_init)
+            hg=self.hourglass_2(hg)
+            hg=self.hourglass_3(hg)
+            hg=self.hourglass_4(hg)
+        if self.mode=="DeepLinear":
+            pass
         #print(hg.shape)
-        return self.dec_1(hg)        
+        return self.final_sigmoid(self.dec_1(hg))        
     
 class UNetDown(nn.Module):
     def __init__(self, in_size, out_size, normalize=True, dropout=0.0):

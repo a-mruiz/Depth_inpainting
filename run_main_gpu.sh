@@ -16,7 +16,7 @@
 
 #srun python3 test_net_gdem_data.py
 
-srun python3 main_train_nets_cesvima.py
+srun python3 main_train_new.py
 
 #srun python3 ExploreDatasetParameters.py
 

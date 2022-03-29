@@ -173,77 +173,80 @@ class Result(object):
 
 
 class Logger:
-    def __init__(self,params):
+    def __init__(self,params, deactivate=False):
         """Will create a logger process to generate a copy of the actual code structure into a 
             folder with the date of the execution and different parameters
             params-> dict containing important training params such as lr, weight_decay
         """
+        self.deactivate=deactivate
+        if not self.deactivate:            
+            self.fieldnames = ['epoch','loss', 'psnr', 'gpu_time']
 
-        self.fieldnames = ['epoch','loss', 'psnr', 'gpu_time']
+            self.output_directory = create_output_folder_name(params)
+            self.best_result = Result()
+            self.best_result.set_to_worst()
+            os.makedirs(self.output_directory)
+            self.train_csv = os.path.join(self.output_directory, 'train.csv')
+            self.val_csv = os.path.join(self.output_directory, 'val.csv')
+            self.best_txt = os.path.join(self.output_directory, 'best.txt')
 
-        self.output_directory = create_output_folder_name(params)
-        self.best_result = Result()
-        self.best_result.set_to_worst()
-        os.makedirs(self.output_directory)
-        self.train_csv = os.path.join(self.output_directory, 'train.csv')
-        self.val_csv = os.path.join(self.output_directory, 'val.csv')
-        self.best_txt = os.path.join(self.output_directory, 'best.txt')
-
-        print("===> Creating source code backup ...")
-        backup_directory = os.path.join(self.output_directory, "code_backup")
-        self.backup_directory = backup_directory
-        backup_source_code(backup_directory)
-        # create new csv files with only header
-        with open(self.train_csv, 'w') as csvfile:
-            writer = csv.DictWriter(csvfile, fieldnames=self.fieldnames)
-            writer.writeheader()
-        with open(self.val_csv, 'w') as csvfile:
-            writer = csv.DictWriter(csvfile, fieldnames=self.fieldnames)
-            writer.writeheader()
-        print("===> Finished creating source code backup.")
-    
-    def logToFile(self,epoch, rmse, mae, gpu_time, train=True):
-        if train:
-            csvfile_name=self.train_csv
-        else:
-            csvfile_name=self.val_csv
-            
-        with open(csvfile_name, 'a') as csvfile:
-            writer = csv.DictWriter(csvfile, fieldnames=self.fieldnames)
-            writer.writerow({
-                'epoch': epoch,
-                'loss': rmse,
-                'psnr': mae,
-                'gpu_time': gpu_time,
-                })
-    def generateTrainingGraphs(self, subtitle=""):
-        #open training log
-        x_axis=[]
-        train_loss=[]
-        train_psnr=[]
-        val_loss=[]
-        val_psnr=[]
+            print("===> Creating source code backup ...")
+            backup_directory = os.path.join(self.output_directory, "code_backup")
+            self.backup_directory = backup_directory
+            backup_source_code(backup_directory)
+            # create new csv files with only header
+            with open(self.train_csv, 'w') as csvfile:
+                writer = csv.DictWriter(csvfile, fieldnames=self.fieldnames)
+                writer.writeheader()
+            with open(self.val_csv, 'w') as csvfile:
+                writer = csv.DictWriter(csvfile, fieldnames=self.fieldnames)
+                writer.writeheader()
+            print("===> Finished creating source code backup.")
         
-        with open(self.train_csv, newline='') as csvfile:
-            csvreader = csv.reader(csvfile, delimiter=',')
-            next(csvreader)  # skip the header
-            for row in csvreader:
-                x_axis.append(row[0])
-                train_loss.append(float(row[1]))
-                train_psnr.append(float(row[2]))
-                
-        with open(self.val_csv, newline='') as csvfile:
-            csvreader = csv.reader(csvfile, delimiter=',')
-            next(csvreader)  # skip the header
-            for row in csvreader:
-                #x_axis.append(row[0])
-                val_loss.append(float(row[1]))
-                val_psnr.append(float(row[2]))
+    def logToFile(self,epoch, rmse, mae, gpu_time, train=True):
+        if not self.deactivate: 
+            if train:
+                csvfile_name=self.train_csv
+            else:
+                csvfile_name=self.val_csv
 
-        graph_utils.make_graph([train_loss, val_loss], ['train', 'val'], x_axis, title="Loss values train&test", x_label="epochs",
-                       y_label="Loss", x_lim_low=0, x_lim_high=len(x_axis), show=False, subtitle=subtitle, output_dir=self.output_directory,x_ticker=5,y_ticker=0.1)
-        graph_utils.make_graph([train_psnr, val_psnr], ['train', 'val'], x_axis, title="PSNR values train&test", x_label="epochs",
-                       y_label="PSNR(dB)", x_lim_low=0, x_lim_high=len(x_axis), show=False, subtitle=subtitle, output_dir=self.output_directory,x_ticker=5)
+            with open(csvfile_name, 'a') as csvfile:
+                writer = csv.DictWriter(csvfile, fieldnames=self.fieldnames)
+                writer.writerow({
+                    'epoch': epoch,
+                    'loss': rmse,
+                    'psnr': mae,
+                    'gpu_time': gpu_time,
+                    })
+    def generateTrainingGraphs(self, subtitle=""):
+        if not self.deactivate: 
+            #open training log
+            x_axis=[]
+            train_loss=[]
+            train_psnr=[]
+            val_loss=[]
+            val_psnr=[]
+            
+            with open(self.train_csv, newline='') as csvfile:
+                csvreader = csv.reader(csvfile, delimiter=',')
+                next(csvreader)  # skip the header
+                for row in csvreader:
+                    x_axis.append(row[0])
+                    train_loss.append(float(row[1]))
+                    train_psnr.append(float(row[2]))
+                    
+            with open(self.val_csv, newline='') as csvfile:
+                csvreader = csv.reader(csvfile, delimiter=',')
+                next(csvreader)  # skip the header
+                for row in csvreader:
+                    #x_axis.append(row[0])
+                    val_loss.append(float(row[1]))
+                    val_psnr.append(float(row[2]))
+
+            graph_utils.make_graph([train_loss, val_loss], ['train', 'val'], x_axis, title="Loss values train&test", x_label="epochs",
+                        y_label="Loss", x_lim_low=0, x_lim_high=len(x_axis), show=False, subtitle=subtitle, output_dir=self.output_directory,x_ticker=5,y_ticker=0.1)
+            graph_utils.make_graph([train_psnr, val_psnr], ['train', 'val'], x_axis, title="PSNR values train&test", x_label="epochs",
+                        y_label="PSNR(dB)", x_lim_low=0, x_lim_high=len(x_axis), show=False, subtitle=subtitle, output_dir=self.output_directory,x_ticker=5)
 
         
     

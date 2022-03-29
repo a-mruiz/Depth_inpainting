@@ -47,7 +47,7 @@ def train_model(model, epochs, params, optimizer, logger, loader, loader_val, cr
                 val_current_psnr = losses.psnr_loss(output, batch_data['gt']).item()
                 val_losses.append(val_current_loss)
                 val_psnrs.append(val_current_psnr)
-                save_result_row(batch_data, output, "out_"+str(epoch)+".png", folder="outputs/val/middlebury/two/")
+                save_result_row(batch_data, output, "out_"+str(epoch)+".png", folder="outputs/val/test/")
 
             mean_loss_batch = sum(losses_batch)/len(losses_batch)
             mean_psnr_batch = sum(psnr_batch)/len(psnr_batch)
@@ -60,7 +60,7 @@ def train_model(model, epochs, params, optimizer, logger, loader, loader_val, cr
             logger.logToFile(epoch, val_mean_loss, -val_mean_psnr, gpu_time, False)
             if -val_mean_psnr>val_psnr:
                 val_psnr=val_mean_psnr
-                torch.save(model.state_dict(), logger.backup_directory+"/model_best.pth")
+                #torch.save(model.state_dict(), logger.backup_directory+"/model_best.pth")
                 print(val_psnr)
         #prof.step()
         #lr_scheduler(mean_loss_batch)

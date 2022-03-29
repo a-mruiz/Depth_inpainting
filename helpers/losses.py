@@ -96,7 +96,7 @@ class BerHuLoss(nn.Module):
         super(BerHuLoss, self).__init__()
         self.threshold = threshold
     
-    def forward(self, real, fake):
+    def forward(self, fake, real):
         mask = real>0
         if not fake.shape == real.shape:
             _,_,H,W = real.shape
@@ -213,7 +213,6 @@ class SSIMLoss(torch.nn.Module):
         super(SSIMLoss,self).__init__()
 
     def forward(self,x,y):
-
 
         return k_losses.ssim_loss(x,y,11)
 
