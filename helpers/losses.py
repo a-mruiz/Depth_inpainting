@@ -9,6 +9,7 @@ import torch.nn as nn
 import kornia.losses as k_losses
 import torch.nn.functional as F
 import torchvision.transforms as transforms
+from pytorch_msssim import ssim, ms_ssim, SSIM, MS_SSIM
 
 psnr_loss=k_losses.PSNRLoss(1)
 
@@ -34,7 +35,7 @@ class MaskedMSELoss(nn.Module):
     def forward(self, pred, target):
        
         assert pred.dim() == target.dim(), "inconsistent dimensions"
-        valid_mask = (target > 0.0).detach()
+        valid_mask = (target > 0).detach()
         diff = target - pred
         diff = diff[valid_mask]
         self.loss = (diff**2).mean()
@@ -42,18 +43,21 @@ class MaskedMSELoss(nn.Module):
 
 
 class CombinedNew(nn.Module):
-    def __init__(self,alpha1=0.7,alpha2=0.7):
+    def __init__(self,alpha1=0.85,alpha2=0.85):
         super(CombinedNew,self).__init__()
         self.SSIM=SSIMLoss()
-        self.L2=MaskedMSELoss()
+        self.L2=MaskedMSELoss() 
         self.L1=MaskedL1Loss()
         self.alpha1=alpha1
         self.alpha2=alpha2
+        self.MS_SSIM = MS_SSIM(data_range=1., size_average=True, channel=1)
+        #self.SSIM=SSIM(data_range=1, size_average=True, channel=1) # channel=1 for grayscale images
+
 
     def forward(self,pred,target):
         x=pred
         y=target
-        return self.alpha1*(self.alpha2*self.L2(x,y)+(1-self.alpha2)*self.L1(x,y))+(1-self.alpha1)*(self.SSIM(x, y))
+        return self.alpha1*(self.alpha2*self.L2(x,y)+(1-self.alpha2)*self.L1(x,y))+(1-self.alpha1)*(1-self.MS_SSIM(x, y))
     
 class KorniaPSNRLoss(nn.Module):
     def __init__(self, max_value=1):

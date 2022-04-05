@@ -3,12 +3,12 @@
 #SBATCH --partition=standard-gpu
 #SBATCH --job-name=HParams
 #SBATCH --ntasks=1
-#SBATCH --ntasks-per-node=8
+#SBATCH --ntasks-per-node=14
 #SBATCH --cpus-per-task=1
 #SBATCH --mem=20G
 #SBATCH --mail-user=a.mruiz@upm.es
 #SBATCH --mail-type=ALL
-#SBATCH --time=128:00:00
+#SBATCH --time=64:00:00
 #SBATCH --gres=gpu:a100:1
 ##------------------------ End job description ------------------------
 

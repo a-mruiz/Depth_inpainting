@@ -220,10 +220,11 @@ def quick_remove_occlusions(depth):
     Args:
         depth ([type]): [Depth map to remove occlusions]
     """
-    print("Depth Max->"+str(depth.max()))
-    print("Depth Min->"+str(depth.min()))
-    print("Depth Mean->"+str(depth.mean()))
+    #print("Depth Max->"+str(depth.max()))
+    #print("Depth Min->"+str(depth.min()))
+    #print("Depth Mean->"+str(depth.mean()))
     depth_2=depth.copy()
+    depth_closing_2 = cv2.morphologyEx(depth, cv2.MORPH_CLOSE, kernel)
 
     depth_2 = cv2.morphologyEx(depth_2, cv2.MORPH_CLOSE, kernel)
 
@@ -238,7 +239,7 @@ def quick_remove_occlusions(depth):
     dilated = cv2.dilate(depth_map, kernel_7)
     depth_map[empty_pixels] = dilated[empty_pixels]
 
-    save_result_row_2(np.squeeze(depth),depth_map,depth_2,np.squeeze(depth)-depth_closing_2, "testing_3.png")
+    #save_result_row_2(np.squeeze(depth),depth_map,depth_2,np.squeeze(depth)-depth_closing_2, "testing_3.png")
     return depth_map
 
 
@@ -292,11 +293,11 @@ def slow_remove_occlusions(depth):
 
     depth_map_opened = cv2.morphologyEx(depth_map_closed, cv2.MORPH_OPEN, kernel_11)
 
-    depth_map_closed_2, _ = fill_in_multiscale(depth, 160)
+    depth_map_closed_2, _ = fill_in_multiscale(depth, 255)
 
     #print("DEPTH MAP SHAPE->"+str(depth_map_closed.shape))
     
-    #quick_depth=quick_remove_occlusions(depth_2)
+    quick_depth=quick_remove_occlusions(depth_2)
         
     #depth=1-depth
     #save_result_row_2(np.squeeze(depth_2),depth_map_closed,quick_depth,depth, "testing_4.png")

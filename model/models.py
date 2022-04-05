@@ -4,6 +4,7 @@ Author:Alejandro
 """
 
 from json import encoder
+from model.attention import CBAM
 from model.basic import *
 from torchvision.models import resnet
 import torch.nn as nn
@@ -37,6 +38,8 @@ class BasicModel(nn.Module):
         self.dec_5=deconv3x3_bn_relu(in_channels=32, out_channels=2,kernel_size=3, stride=1, padding=1, output_padding=0, bn=False)
 
         init_weights(self)
+        
+        self.final_sigmoid=nn.Sigmoid()
         
     def forward(self,input):
 
@@ -79,7 +82,7 @@ class BasicModel(nn.Module):
 
         output=depth*confidence
 
-        return output#depth, confidence, output 
+        return self.final_sigmoid(output)#depth, confidence, output 
 
 class BasicModel_2(nn.Module):
     """
@@ -1430,18 +1433,19 @@ class OnlyCNN(nn.Module):
         super(OnlyCNN, self).__init__()
 
         #Encoder RGB
-        self.first_layer_rgb=conv3x3_bn_relu(in_channels=3,kernel_size=3,out_channels=32,stride=1, padding=1)#B,32,256,512
-        self.enc_1_rgb=conv3x3_bn_relu(in_channels=32,kernel_size=3,out_channels=32,stride=1, padding=1)#B,32,256,512
+        self.first_layer_rgb=conv3x3_relu(in_channels=3,kernel_size=3,out_channels=32,stride=1, padding=1)#B,32,256,512
+        self.enc_1_rgb=conv3x3_relu(in_channels=32,kernel_size=3,out_channels=32,stride=1, padding=1)#B,32,256,512
         
         #Encoder Depth
-        self.first_layer_depth=conv3x3_bn_relu(in_channels=1,kernel_size=3,out_channels=32,stride=1, padding=1)#B,16,516,1028
-        self.enc_1_depth=conv3x3_bn_relu(in_channels=32,kernel_size=3,out_channels=32,stride=1, padding=1)#B,32,256,512
+        self.first_layer_depth=conv3x3_relu(in_channels=1,kernel_size=3,out_channels=32,stride=1, padding=1)#B,16,516,1028
+        self.enc_1_depth=conv3x3_relu(in_channels=32,kernel_size=3,out_channels=32,stride=1, padding=1)#B,32,256,512
         
         #Decoder
-        self.dec_1=deconv3x3_bn_relu_no_artifacts(in_channels=64, out_channels=32,padding=1, stride=1,output_padding=1, scale_factor=1)#B,64,512,1024
-        self.dec_2=deconv3x3_bn_relu_no_artifacts(in_channels=32, out_channels=32,padding=1, stride=1,output_padding=1, scale_factor=1)#B,64,512,1024
-        self.dec_3=deconv3x3_bn_relu_no_artifacts(in_channels=32, out_channels=1,padding=1, stride=1,output_padding=1, scale_factor=1)#B,1,512,1024
-        #self.dec_6=conv3x3(in_channels=1, out_channels=1,padding=1, stride=1)
+        self.dec_1=deconv3x3_relu_no_artifacts(in_channels=64, out_channels=32,padding=1, stride=1,output_padding=1, scale_factor=1)#B,64,512,1024
+        self.dec_2=deconv3x3_relu_no_artifacts(in_channels=32, out_channels=32,padding=1, stride=1,output_padding=1, scale_factor=1)#B,64,512,1024
+        self.dec_3=deconv3x3_relu_no_artifacts(in_channels=32, out_channels=1,padding=1, stride=1,output_padding=1, scale_factor=1,relu=False)#B,1,512,1024
+        self.dec_6=conv1x1(in_channels=1, out_channels=1, stride=1)
+           
         
         self.final_sigmoid=nn.Sigmoid()
         
@@ -1452,22 +1456,255 @@ class OnlyCNN(nn.Module):
 
         #Rgb branch
         encoder_feature_init_rgb=self.first_layer_rgb(rgb)
+        #print("1 RGB->"+str(encoder_feature_init_rgb.shape))
         encoder_feature_1_rgb=self.enc_1_rgb(encoder_feature_init_rgb)
-
+        #print("2 RGB->"+str(encoder_feature_1_rgb.shape))
         #Depth branch
         encoder_feature_init_depth=self.first_layer_depth(d)
+        #print("1 Depth->"+str(encoder_feature_init_rgb.shape))
         encoder_feature_1_depth=self.enc_1_depth(encoder_feature_init_depth)
+        #print("2 Depth->"+str(encoder_feature_1_depth.shape))
 
         #Join both representations
         encoder_final_joint=torch.cat((encoder_feature_1_rgb,encoder_feature_1_depth),1)
         #print("Joint imgs->"+str(encoder_final_joint.shape))
+        
         #Decoder
         dec_1=self.dec_1(encoder_final_joint)
         dec_2=self.dec_2(dec_1)
         dec_3=self.dec_3(dec_2)
-        return self.final_sigmoid(dec_3)#self.final_sigmoid(decoder_feature_5)#depth, confidence, output 
+        return self.final_sigmoid(self.dec_6(dec_3))#self.final_sigmoid(decoder_feature_5)#depth, confidence, output 
+
+class OnlyCNN_big_filters(nn.Module):
+    def __init__(self):
+        super(OnlyCNN_big_filters, self).__init__()
+
+        #Encoder RGB
+        self.first_layer_rgb=conv3x3_relu(in_channels=3,kernel_size=3,out_channels=32,stride=1, padding=1)#B,32,256,512
+        self.enc_1_rgb=conv3x3_relu(in_channels=32,kernel_size=3,out_channels=32,stride=1, padding=1)#B,32,256,512
+        
+        #Encoder Depth
+        self.first_layer_depth=conv3x3_relu(in_channels=1,kernel_size=3,out_channels=32,stride=1, padding=1)#B,16,516,1028
+        self.enc_1_depth=conv3x3_relu(in_channels=32,kernel_size=3,out_channels=32,stride=1, padding=1)#B,32,256,512
+        
+        #Decoder
+        self.dec_1=deconv3x3_relu_no_artifacts(kernel_size=3,in_channels=64, out_channels=32,padding=1, stride=1,output_padding=1, scale_factor=1)#B,64,512,1024
+        self.dec_2=deconv3x3_relu_no_artifacts(kernel_size=3,in_channels=32, out_channels=32,padding=1, stride=1,output_padding=1, scale_factor=1)#B,64,512,1024
+        self.dec_3=deconv3x3_relu_no_artifacts(in_channels=32, out_channels=1,padding=1, stride=1,output_padding=1, scale_factor=1,relu=False)#B,1,512,1024
+        self.dec_6=conv1x1(in_channels=1, out_channels=1, stride=1)
+           
+        
+        self.final_sigmoid=nn.Sigmoid()
+        
+    def forward(self,input):
+        rgb = input['rgb']
+        gray = input['g']
+        d = input['d']
+
+        #Rgb branch
+        encoder_feature_init_rgb=self.first_layer_rgb(rgb)
+        #print("1 RGB->"+str(encoder_feature_init_rgb.shape))
+        encoder_feature_1_rgb=self.enc_1_rgb(encoder_feature_init_rgb)
+        #print("2 RGB->"+str(encoder_feature_1_rgb.shape))
+        #Depth branch
+        encoder_feature_init_depth=self.first_layer_depth(d)
+        #print("1 Depth->"+str(encoder_feature_init_rgb.shape))
+        encoder_feature_1_depth=self.enc_1_depth(encoder_feature_init_depth)
+        #print("2 Depth->"+str(encoder_feature_1_depth.shape))
+
+        #Join both representations
+        encoder_final_joint=torch.cat((encoder_feature_1_rgb,encoder_feature_1_depth),1)
+        #print("Joint imgs->"+str(encoder_final_joint.shape))
+        
+        #Decoder
+        dec_1=self.dec_1(encoder_final_joint)
+        dec_2=self.dec_2(dec_1)
+        dec_3=self.dec_3(dec_2)
+        return self.final_sigmoid(self.dec_6(dec_3))#self.final_sigmoid(decoder_feature_5)#depth, confidence, output 
 
 
+
+class SelfAttentionModel(nn.Module):
+    def __init__(self,attLayers=4,deconvLayers=3,attentionChannels=64):
+        super(SelfAttentionModel, self).__init__()
+        self.deconvLayers=deconvLayers
+        self.attLayers=attLayers
+        out_channels=int(attentionChannels/2)
+
+        #Encoder RGB
+        self.first_layer_rgb=conv3x3_relu(in_channels=3,kernel_size=3,out_channels=out_channels,stride=2, padding=1)#B,32,256,512
+        #Encoder Depth
+        self.first_layer_depth=conv3x3_relu(in_channels=1,kernel_size=3,out_channels=out_channels,stride=2, padding=1)#B,16,516,1028
+        
+        
+        #Self-attention
+        #self.modules_attention=[]
+        #for att in range(attLayers):
+        #    self.modules_attention.append(DIYSelfAttention(attentionChannels))
+        self.att_1=DIYSelfAttention(attentionChannels)
+        if attLayers==2:
+            self.att_2=DIYSelfAttention(attentionChannels)
+        if attLayers==3:
+            self.att_2=DIYSelfAttention(attentionChannels)
+            self.att_3=DIYSelfAttention(attentionChannels)
+        if attLayers==4:
+            self.att_2=DIYSelfAttention(attentionChannels)
+            self.att_3=DIYSelfAttention(attentionChannels)
+            self.att_4=DIYSelfAttention(attentionChannels)    
+        if deconvLayers==1:
+            self.dec_1=deconv3x3_relu_no_artifacts(in_channels=attentionChannels, out_channels=1,padding=1, stride=1,output_padding=1, scale_factor=2,relu=False)#B,1,512,1024
+        if deconvLayers==2:
+            self.dec_1=deconv3x3_relu_no_artifacts(in_channels=attentionChannels, out_channels=out_channels,padding=1, stride=1,output_padding=2, scale_factor=1)
+            self.dec_2=deconv3x3_relu_no_artifacts(in_channels=out_channels, out_channels=1,padding=1, stride=1,output_padding=1, scale_factor=1,relu=False)
+        if deconvLayers==3:
+            self.dec_1=deconv3x3_relu_no_artifacts(in_channels=attentionChannels, out_channels=out_channels,padding=1, stride=1,output_padding=2, scale_factor=1)
+            self.dec_2=deconv3x3_relu_no_artifacts(in_channels=out_channels, out_channels=int(out_channels/2),padding=1, stride=1,output_padding=1, scale_factor=1)
+            self.dec_3=deconv3x3_relu_no_artifacts(in_channels=int(out_channels/2), out_channels=1,padding=1, stride=1,output_padding=1, scale_factor=1,relu=False)
+        if deconvLayers==4:
+            self.dec_1=deconv3x3_relu_no_artifacts(in_channels=attentionChannels, out_channels=out_channels,padding=1, stride=1,output_padding=1, scale_factor=2)
+            self.dec_2=deconv3x3_relu_no_artifacts(in_channels=out_channels, out_channels=int(out_channels/2),padding=1, stride=1,output_padding=1, scale_factor=1)
+            self.dec_3=deconv3x3_relu_no_artifacts(in_channels=int(out_channels/2), out_channels=int(out_channels/2),padding=1, stride=1,output_padding=1, scale_factor=1)
+            self.dec_4=deconv3x3_relu_no_artifacts(in_channels=int(out_channels/2), out_channels=1,padding=1, stride=1,output_padding=1, scale_factor=1,relu=False)
+            
+        self.final_sigmoid=nn.Sigmoid()
+        
+    def forward(self,input):
+        rgb = input['rgb']
+        gray = input['g']
+        d = input['d']
+
+        #Rgb branch
+        encoder_feature_init_rgb=self.first_layer_rgb(rgb)
+
+        encoder_feature_init_depth=self.first_layer_depth(d)
+
+        #Join both representations
+        out=torch.cat((encoder_feature_init_rgb,encoder_feature_init_depth),1)
+        
+        #Attention layers
+        out=self.att_1(out)
+        if self.attLayers==2:
+            out=self.att_2(out)
+        if self.attLayers==3:
+            out=self.att_2(out)
+            out=self.att_3(out)
+        if self.attLayers==4:
+            out=self.att_2(out)
+            out=self.att_3(out)
+            out=self.att_4(out)
+            
+        #Decoder
+        out=self.dec_1(out)
+        if self.deconvLayers==2:
+            out=self.dec_2(out)
+        if self.deconvLayers==3:
+            out=self.dec_2(out)
+            out=self.dec_3(out)
+        if self.deconvLayers==4:
+            out=self.dec_2(out)
+            out=self.dec_3(out)
+            out=self.dec_4(out)
+                
+        return self.final_sigmoid(out) 
+
+
+
+class SelfAttentionModelBasic(nn.Module):
+    def __init__(self,attLayers=4,deconvLayers=3,attentionChannels=64):
+        super(SelfAttentionModelBasic, self).__init__()
+
+        if attentionChannels==32:
+            out_channels=16
+        if attentionChannels==64:
+            out_channels=32
+            
+        #Encoder RGB
+        self.first_layer_rgb=conv3x3_relu(in_channels=3,kernel_size=3,out_channels=out_channels,stride=1, padding=1)#B,32,256,512
+        #Encoder Depth
+        self.first_layer_depth=conv3x3_relu(in_channels=1,kernel_size=3,out_channels=out_channels,stride=1, padding=1)#B,16,516,1028
+        
+        
+        self.att_1=DIYSelfAttention(attentionChannels)
+      
+        self.modules_deconv=[]    
+        self.dec_1=deconv3x3_relu_no_artifacts(in_channels=attentionChannels, out_channels=1,padding=1, stride=1,output_padding=1, scale_factor=1,relu=False)
+
+        self.modules_deconv.append(deconv3x3_relu_no_artifacts_class(in_channels=attentionChannels, out_channels=1,padding=1, stride=1,output_padding=1, scale_factor=1,relu=False))
+
+            
+        self.final_sigmoid=nn.Sigmoid()
+        
+    def forward(self,input):
+        rgb = input['rgb']
+        gray = input['g']
+        d = input['d']
+
+        #Rgb branch
+        encoder_feature_init_rgb=self.first_layer_rgb(rgb)
+
+        encoder_feature_init_depth=self.first_layer_depth(d)
+
+        #Join both representations
+        out=torch.cat((encoder_feature_init_rgb,encoder_feature_init_depth),1)
+        #print("Joint imgs->"+str(encoder_final_joint.shape))
+        
+        out=self.att_1(out)
+            
+        #Decoder
+        #out=self.dec_1(out)
+        for m in self.modules_deconv:
+            out=m(out)
+        
+        return self.final_sigmoid(out) 
+
+
+
+
+class FCN(nn.Module):
+    """
+    Idea from the paper "Depth Map Inpainting Using a Fully Convolutional Network" in https://ieeexplore.ieee.org/stamp/stamp.jsp?tp=&arnumber=8961820
+    """
+    def __init__(self):
+        super(OnlyCNN, self).__init__()
+
+        #Encoder RGB
+        self.first_layer_rgb=conv3x3_relu(in_channels=3,kernel_size=7,out_channels=31,stride=2, padding=1)#B,32,256,512
+        
+        #Encoder Depth
+        self.first_layer_depth=conv3x3_relu(in_channels=32,kernel_size=7,out_channels=64,stride=1, padding=1)#B,16,516,1028
+        self.enc_1_depth=conv3x3_relu(in_channels=32,kernel_size=3,out_channels=32,stride=1, padding=1)#B,32,256,512
+        
+        #Decoder
+        self.dec_1=deconv3x3_relu_no_artifacts(in_channels=64, out_channels=32,padding=1, stride=1,output_padding=1, scale_factor=1)#B,64,512,1024
+        self.dec_2=deconv3x3_relu_no_artifacts(in_channels=32, out_channels=32,padding=1, stride=1,output_padding=1, scale_factor=1)#B,64,512,1024
+        self.dec_3=deconv3x3_relu_no_artifacts(in_channels=32, out_channels=1,padding=1, stride=1,output_padding=1, scale_factor=1,relu=False)#B,1,512,1024
+        self.dec_6=conv3x3(in_channels=1, out_channels=1,padding=1, stride=1)
+           
+        
+        self.final_sigmoid=nn.Sigmoid()
+        
+    def forward(self,input):
+        rgb = input['rgb']
+        gray = input['g']
+        d = input['d']
+
+        #Rgb branch
+        encoder_feature_init_rgb=self.first_layer_rgb(rgb)
+        encoder_final_joint=torch.cat((encoder_feature_init_rgb,d),1) #32channels
+
+        
+        
+        
+        
+        #Join both representations
+        encoder_final_joint=torch.cat((encoder_feature_1_rgb,encoder_feature_1_depth),1)
+        #print("Joint imgs->"+str(encoder_final_joint.shape))
+        
+        #Decoder
+        dec_1=self.dec_1(encoder_final_joint)
+        dec_2=self.dec_2(dec_1)
+        dec_3=self.dec_3(dec_2)
+        return self.final_sigmoid(self.dec_6(dec_3))#self.final_sigmoid(decoder_feature_5)#depth, confidence, output 
 
 
 
@@ -1612,29 +1849,31 @@ class BasicModelUltraLightTwoBranch(nn.Module):
         #First layer of the network, where the rgb and depth values are introduced
         self.in_channels=in_channels
         if self.in_channels>1:
-            self.first_layer_rgb=conv3x3_bn_relu(in_channels=3,kernel_size=3,out_channels=16,stride=1, padding=1)
-            self.first_layer_depth=conv3x3_bn_relu(in_channels=1,kernel_size=3,out_channels=16,stride=1, padding=1)
+            self.first_layer_rgb=conv3x3_relu(in_channels=3,kernel_size=3,out_channels=16,stride=1, padding=1)
+            self.first_layer_depth=conv3x3_relu(in_channels=1,kernel_size=3,out_channels=16,stride=1, padding=1)
         else:#4 channels
-            self.first_layer_depth=conv3x3_bn_relu(in_channels=1,kernel_size=3,out_channels=16,stride=1, padding=1)
-            self.first_layer_rgb=conv3x3_bn_relu(in_channels=1,kernel_size=3,out_channels=16,stride=1, padding=1)
+            self.first_layer_depth=conv3x3_relu(in_channels=1,kernel_size=3,out_channels=16,stride=1, padding=1)
+            self.first_layer_rgb=conv3x3_relu(in_channels=1,kernel_size=3,out_channels=16,stride=1, padding=1)
         #Encoder
-        self.enc_1=ResNetBlock(in_channels=32, out_channels=64, stride=2)
-        self.enc_2=ResNetBlock(in_channels=64, out_channels=128, stride=2)
-        self.enc_3=ResNetBlock(in_channels=128, out_channels=256, stride=2)
-        self.enc_4=ResNetBlock(in_channels=256, out_channels=512, stride=2)
+        self.enc_1=ResNetBlock(in_channels=32, out_channels=64, stride=2,batch=False)
+        self.enc_2=ResNetBlock(in_channels=64, out_channels=128, stride=2,batch=False)
+        self.enc_3=ResNetBlock(in_channels=128, out_channels=256, stride=2,batch=False)
+        self.enc_4=ResNetBlock(in_channels=256, out_channels=512, stride=2,batch=False)
         #self.enc_5=ResNetBlock(in_channels=512, out_channels=512, stride=1)
 
         #Decoder
-        self.dec_1=deconv3x3_bn_relu(in_channels=512, out_channels=256,padding=1)
-        self.dec_2=deconv3x3_bn_relu(in_channels=256, out_channels=128,padding=1)
-        self.dec_3=deconv3x3_bn_relu(in_channels=128, out_channels=64,padding=1)
-        self.dec_4=deconv3x3_bn_relu(in_channels=64, out_channels=1,bn=False,padding=1)
+        self.dec_1=deconv3x3_relu(in_channels=512, out_channels=256,padding=1)
+        self.dec_2=deconv3x3_relu(in_channels=256, out_channels=128,padding=1)
+        self.dec_3=deconv3x3_relu(in_channels=128, out_channels=64,padding=1)
+        self.dec_4=deconv3x3_relu(in_channels=64, out_channels=1,bn=False,padding=1)
         #self.dec_5=deconv_bn_relu(in_channels=16, out_channels=1,kernel_size=3,bn=False,padding=1)
         #self.dec_5=conv3x3_bn_relu(in_channels=16, out_channels=2,kernel_size=3, stride=1, padding=1,bn=False)
 
         #init_weights(self)
-        #self.apply(weights_init(init_type='kaiming'))
+        self.apply(weights_init(init_type='kaiming'))
         self.relu= nn.ReLU(inplace=True)
+        
+        self.final_sigmoid=nn.Sigmoid()
     def forward(self,input):
         rgb = input['rgb']
         gray = input['g']
@@ -1678,7 +1917,7 @@ class BasicModelUltraLightTwoBranch(nn.Module):
         #confidence=decoder_feature_5[:, 1:2, :, :]
         #output=depth*confidence
 
-        return decoder_feature_4_plus#depth, confidence, output 
+        return self.final_sigmoid(decoder_feature_4_plus)#depth, confidence, output 
 
 
 class BasicModelUltraLightBottleneck(nn.Module):
@@ -1776,8 +2015,10 @@ class TFGmodel(nn.Module):
         self.dec_2=deconv3x3_bn_relu(in_channels=256, out_channels=128, kernel_size=3, padding=1)
         self.dec_3=deconv3x3_bn_relu(in_channels=128, out_channels=64, kernel_size=3, padding=1)
         self.dec_4=deconv3x3_bn_relu(in_channels=64, out_channels=32, kernel_size=3, padding=1)
-        self.dec_5=conv3x3_bn_relu(in_channels=32, out_channels=2,kernel_size=3, stride=1, padding=1,bn=False)
+        self.dec_5=conv3x3_bn_relu(in_channels=32, out_channels=2,kernel_size=3, stride=2, padding=1,bn=False)
 
+        self.final_sigmoid=nn.Sigmoid()
+        
         init_weights(self)
         
     def forward(self,input):
@@ -1797,7 +2038,7 @@ class TFGmodel(nn.Module):
         encoder_feature_3=self.enc_3(encoder_feature_2)
         encoder_feature_4=self.enc_4(encoder_feature_3)
         #encoder_feature_5=self.enc_5(encoder_feature_4)
-        print(encoder_feature_4.shape)
+        #print(encoder_feature_4.shape)
         #Decoder
         decoder_feature_1=self.dec_1(encoder_feature_4)
         decoder_feature_1_plus=decoder_feature_1+encoder_feature_3 #skip connection
@@ -1809,7 +2050,7 @@ class TFGmodel(nn.Module):
         decoder_feature_3_plus=decoder_feature_3+encoder_feature_1 #skip connection
 
         decoder_feature_4=self.dec_4(decoder_feature_3_plus)
-        decoder_feature_4_plus=decoder_feature_4+encoder_feature_init #skip connection
+        decoder_feature_4_plus=decoder_feature_4#+encoder_feature_init #skip connection
 
         decoder_feature_5=self.dec_5(decoder_feature_4_plus)
 
@@ -1819,7 +2060,7 @@ class TFGmodel(nn.Module):
 
         output=depth*confidence
 
-        return output#depth, confidence, output 
+        return self.final_sigmoid(output)#depth, confidence, output 
     
     
 
@@ -1932,6 +2173,8 @@ class EncDecDropoutFull(nn.Module):
 
         self.dec_7 = nn.ConvTranspose2d(32, 1, 2, stride=2, padding=0, output_padding=0, bias=True)
         
+        self.final_sigmoid=nn.Sigmoid()
+        
         self.apply(weights_init(init_type='xavier'))
         
     def forward(self,input):
@@ -1956,7 +2199,7 @@ class EncDecDropoutFull(nn.Module):
 
         out=self.dec_7(out)
         
-        return out
+        return self.final_sigmoid(out)
     
 class HourGlassNetwork(nn.Module):
     def __init__(self,mode="Light"):
@@ -1968,12 +2211,10 @@ class HourGlassNetwork(nn.Module):
         self.first_layer_rgb=conv3x3_bn_relu(in_channels=3,kernel_size=3,out_channels=32,stride=1, padding=1)
         self.first_layer_depth=conv3x3_bn_relu(in_channels=1,kernel_size=3,out_channels=32,stride=1, padding=1)
         
-        self.hourglass_1=HourglassModule(4,64)
-        self.hourglass_2=HourglassModule(4,64)
-        self.hourglass_3=HourglassModule(4,64)
-        self.hourglass_4=HourglassModule(4,64)
-        
-        
+        self.hourglass_1=HourglassModule(1,64)
+        self.hourglass_2=HourglassModule(1,64)
+        self.hourglass_3=HourglassModule(1,64)
+        self.hourglass_4=HourglassModule(1,64)
         
         
         self.dec_1=deconv3x3_bn_relu(in_channels=64, out_channels=1, kernel_size=3, padding=1,stride=1,output_padding=0)
@@ -2132,3 +2373,80 @@ def weights_init_normal_pix2pix(m):
     elif classname.find("BatchNorm2d") != -1:
         torch.nn.init.normal_(m.weight.data, 1.0, 0.02)
         torch.nn.init.constant_(m.bias.data, 0.0)
+
+
+
+
+class SelfAttentionModelCBAM(nn.Module):
+    def __init__(self,attLayers=4,deconvLayers=3,attentionChannels=64):
+        super(SelfAttentionModelCBAM, self).__init__()
+        self.deconvLayers=deconvLayers
+        self.attLayers=attLayers
+        out_channels=int(attentionChannels/2)
+
+        #Encoder RGB
+        self.first_layer_rgb=conv3x3_relu(in_channels=3,kernel_size=3,out_channels=out_channels,stride=1, padding=1)#B,32,256,512
+        #Encoder Depth
+        self.first_layer_depth=conv3x3_relu(in_channels=1,kernel_size=3,out_channels=out_channels,stride=1, padding=1)#B,16,516,1028
+        
+        
+        #Self-attention
+        #self.modules_attention=[]
+        #for att in range(attLayers):
+        #    self.modules_attention.append(DIYSelfAttention(attentionChannels))
+        self.att_1=CBAM(attentionChannels)
+        if attLayers==2:
+            self.att_2=CBAM(attentionChannels)
+        if attLayers==3:
+            self.att_2=CBAM(attentionChannels)
+            self.att_3=CBAM(attentionChannels)
+        if attLayers==4:
+            self.att_2=CBAM(attentionChannels)
+            self.att_3=CBAM(attentionChannels)
+            self.att_4=CBAM(attentionChannels)    
+        if deconvLayers==1:
+            self.dec_1=deconv3x3_relu_no_artifacts(in_channels=attentionChannels, out_channels=1,padding=1, stride=1,output_padding=1, scale_factor=1,relu=False)#B,1,512,1024
+        if deconvLayers==2:
+            self.dec_1=deconv3x3_relu_no_artifacts(in_channels=attentionChannels, out_channels=out_channels,padding=1, stride=1,output_padding=1, scale_factor=1)
+            self.dec_2=deconv3x3_relu_no_artifacts(in_channels=out_channels, out_channels=1,padding=1, stride=1,output_padding=1, scale_factor=1,relu=False)
+        if deconvLayers==3:
+            self.dec_1=deconv3x3_relu_no_artifacts(in_channels=attentionChannels, out_channels=out_channels,padding=1, stride=1,output_padding=1, scale_factor=1)
+            self.dec_2=deconv3x3_relu_no_artifacts(in_channels=out_channels, out_channels=int(out_channels/2),padding=1, stride=1,output_padding=1, scale_factor=1)
+            self.dec_3=deconv3x3_relu_no_artifacts(in_channels=int(out_channels/2), out_channels=1,padding=1, stride=1,output_padding=1, scale_factor=1,relu=False)
+            
+        self.final_sigmoid=nn.Sigmoid()
+        
+    def forward(self,input):
+        rgb = input['rgb']
+        gray = input['g']
+        d = input['d']
+
+        #Rgb branch
+        encoder_feature_init_rgb=self.first_layer_rgb(rgb)
+
+        encoder_feature_init_depth=self.first_layer_depth(d)
+
+        #Join both representations
+        out=torch.cat((encoder_feature_init_rgb,encoder_feature_init_depth),1)
+        
+        #Attention layers
+        out=self.att_1(out)
+        if self.attLayers==2:
+            out=self.att_2(out)
+        if self.attLayers==3:
+            out=self.att_2(out)
+            out=self.att_3(out)
+        if self.attLayers==4:
+            out=self.att_2(out)
+            out=self.att_3(out)
+            out=self.att_4(out)
+            
+        #Decoder
+        out=self.dec_1(out)
+        if self.deconvLayers==2:
+            out=self.dec_2(out)
+        if self.deconvLayers==3:
+            out=self.dec_2(out)
+            out=self.dec_3(out)
+                
+        return self.final_sigmoid(out) 

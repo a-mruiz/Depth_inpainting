@@ -8,91 +8,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 import math
 
-def conv1x1(in_channels, out_channels, stride=1, groups=1, bias=False):
-    """1x1 convolution"""
-    layer= nn.Conv2d(in_channels, out_channels, kernel_size=1, stride=stride, groups=groups, bias=bias)
-    init_weights(layer)
-    return layer
-
-def conv3x3(in_channels, out_channels, stride=1, groups=1, dilation=1, bias=False, padding=1):
-    """3x3 convolution with padding"""
-    if padding >= 1:
-        padding = dilation
-    layer= nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=stride,
-                     padding=padding, groups=groups, bias=True, dilation=dilation)
-    init_weights(layer)
-    return layer
-    
-
-def conv3x3_bn_relu(in_channels, out_channels, kernel_size=3,stride=1, padding=1,bn=True):
-    """Convolution + BatchNorm + ReLU"""
-    if bn:
-        layers= nn.Sequential(
-	    	nn.Conv2d(in_channels, out_channels, kernel_size=kernel_size, stride=stride, padding=padding, bias=False),
-	    	#nn.BatchNorm2d(out_channels,momentum=0.9),
-            nn.InstanceNorm2d(out_channels),
-	    	nn.ReLU(inplace=True)
-	    )
-    else:
-        layers= nn.Sequential(
-		nn.Conv2d(in_channels, out_channels, kernel_size=kernel_size, stride=stride, padding=padding, bias=True),
-	)
-    for m in layers.modules():
-        init_weights(m)
-    return layers
-        
-def conv3x3_bn_Leakyrelu(in_channels, out_channels, kernel_size=3,stride=1, padding=1,bn=True):
-    """Convolution + BatchNorm + LeakyReLU"""
-    if bn:
-        layers=  nn.Sequential(
-	    	nn.Conv2d(in_channels, out_channels, kernel_size=kernel_size, stride=stride, padding=padding, bias=False),
-	    	nn.BatchNorm2d(out_channels),
-	    	nn.LeakyReLU(0.2,inplace=True)
-	    )
-    else:
-        layers=  nn.Sequential(
-		nn.Conv2d(in_channels, out_channels, kernel_size=kernel_size, stride=stride, padding=padding, bias=True),
-	)
-    for m in layers.modules():
-        init_weights(m)
-    return layers
-
-def deconv3x3_bn_relu(in_channels, out_channels, kernel_size=3, stride=2, padding=2, output_padding=1, bn=True):
-    """Transpose convolution + BatchNorm + ReLU"""
-    if bn:
-        layers= nn.Sequential(
-            nn.ConvTranspose2d(in_channels, out_channels, kernel_size=kernel_size, stride=stride, padding=padding, output_padding=output_padding, bias=False),
-            nn.BatchNorm2d(out_channels),
-            nn.ReLU(inplace=True)
-        )
-    else:
-        layers= nn.Sequential(
-            nn.ConvTranspose2d(in_channels, out_channels, kernel_size=kernel_size, stride=stride, padding=padding, output_padding=output_padding, bias=True),
-        )
-    for m in layers.modules():
-        init_weights(m)
-    return layers
-
-def deconv3x3_bn_relu_no_artifacts(in_channels, out_channels, kernel_size=3, stride=1, padding=1, output_padding=1, bn=True,scale_factor=2, dilation=1):
-    """Transpose convolution + BatchNorm + ReLU"""
-    if bn:
-        layers= nn.Sequential(
-            nn.Upsample(scale_factor=scale_factor, mode="nearest" ),
-            nn.Conv2d( in_channels=in_channels, out_channels=out_channels, kernel_size=kernel_size, stride=stride, padding=padding, dilation=dilation),
-            nn.ReLU(inplace=True),
-            nn.InstanceNorm2d(out_channels),
-            nn.Conv2d( in_channels=in_channels, out_channels=out_channels, kernel_size=kernel_size, stride=1, padding=1, dilation=1),
-            nn.ReLU(inplace=True),
-            nn.InstanceNorm2d(out_channels)
-            #nn.BatchNorm2d(out_channels,momentum=0.9)
-        )
-    else:
-        layers= nn.Sequential(
-            nn.ConvTranspose2d(in_channels, out_channels, kernel_size=kernel_size, stride=stride, padding=padding, output_padding=output_padding, bias=True),
-        )
-    for m in layers.modules():
-        init_weights(m)
-    return layers
 
 def init_weights(m):
     # Initialize filters with Gaussian random weights
@@ -131,6 +46,187 @@ def weights_init(init_type='gaussian'):
                 nn.init.constant_(m.bias, 0.0)
 
     return init_fun
+
+
+
+
+def conv1x1(in_channels, out_channels, stride=1, groups=1, bias=False):
+    """1x1 convolution"""
+    layer= nn.Conv2d(in_channels, out_channels, kernel_size=1, stride=stride, groups=groups, bias=bias)
+    init_weights(layer)
+    return layer
+
+def conv3x3(in_channels, out_channels, stride=1, groups=1, dilation=1, bias=False, padding=1):
+    """3x3 convolution with padding"""
+    if padding >= 1:
+        padding = dilation
+    layer= nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=stride,
+                     padding=padding, groups=groups, bias=True, dilation=dilation)
+    init_weights(layer)
+    return layer
+    
+
+def conv3x3_bn_relu(in_channels, out_channels, kernel_size=3,stride=1, padding=1,bn=True):
+    """Convolution + BatchNorm + ReLU"""
+    if bn:
+        layers= nn.Sequential(
+	    	nn.Conv2d(in_channels, out_channels, kernel_size=kernel_size, stride=stride, padding=padding, bias=False),
+	    	#nn.BatchNorm2d(out_channels,momentum=0.9),
+            nn.InstanceNorm2d(out_channels),
+	    	nn.ReLU(inplace=True)
+	    )
+    else:
+        layers= nn.Sequential(
+		nn.Conv2d(in_channels, out_channels, kernel_size=kernel_size, stride=stride, padding=padding, bias=True),
+	)
+    for m in layers.modules():
+        init_weights(m)
+    return layers
+        
+def conv3x3_relu(in_channels, out_channels, kernel_size=3,stride=1, padding=1,relu=True):
+    """Convolution + BatchNorm + ReLU"""
+    if relu:
+        layers= nn.Sequential(
+	    	nn.Conv2d(in_channels, out_channels, kernel_size=kernel_size, stride=stride, padding=padding, bias=False),
+	    	nn.ReLU(inplace=True)
+	    )
+    else:
+        layers= nn.Sequential(
+		nn.Conv2d(in_channels, out_channels, kernel_size=kernel_size, stride=stride, padding=padding, bias=True),
+	)
+    for m in layers.modules():
+        init_weights(m)
+    return layers
+
+
+def conv3x3_bn_Leakyrelu(in_channels, out_channels, kernel_size=3,stride=1, padding=1,bn=True):
+    """Convolution + BatchNorm + LeakyReLU"""
+    if bn:
+        layers=  nn.Sequential(
+	    	nn.Conv2d(in_channels, out_channels, kernel_size=kernel_size, stride=stride, padding=padding, bias=False),
+	    	nn.BatchNorm2d(out_channels),
+	    	nn.LeakyReLU(0.2,inplace=True)
+	    )
+    else:
+        layers=  nn.Sequential(
+		nn.Conv2d(in_channels, out_channels, kernel_size=kernel_size, stride=stride, padding=padding, bias=True),
+	)
+    for m in layers.modules():
+        init_weights(m)
+    return layers
+
+def deconv3x3_bn_relu(in_channels, out_channels, kernel_size=3, stride=2, padding=2, output_padding=1, bn=True):
+    """Transpose convolution + BatchNorm + ReLU"""
+    if bn:
+        layers= nn.Sequential(
+            nn.ConvTranspose2d(in_channels, out_channels, kernel_size=kernel_size, stride=stride, padding=padding, output_padding=output_padding, bias=False),
+            nn.BatchNorm2d(out_channels),
+            nn.ReLU(inplace=True)
+        )
+    else:
+        layers= nn.Sequential(
+            nn.ConvTranspose2d(in_channels, out_channels, kernel_size=kernel_size, stride=stride, padding=padding, output_padding=output_padding, bias=True),
+        )
+    for m in layers.modules():
+        init_weights(m)
+    return layers
+
+def deconv3x3_relu(in_channels, out_channels, kernel_size=3, stride=2, padding=2, output_padding=1, relu=True):
+    """Transpose convolution + BatchNorm + ReLU"""
+    if relu:
+        layers= nn.Sequential(
+            nn.ConvTranspose2d(in_channels, out_channels, kernel_size=kernel_size, stride=stride, padding=padding, output_padding=output_padding, bias=False),
+            nn.ReLU(inplace=True)
+        )
+    else:
+        layers= nn.Sequential(
+            nn.ConvTranspose2d(in_channels, out_channels, kernel_size=kernel_size, stride=stride, padding=padding, output_padding=output_padding, bias=True),
+        )
+    for m in layers.modules():
+        init_weights(m)
+    return layers
+
+def deconv3x3_bn_relu_no_artifacts(in_channels, out_channels, kernel_size=3, stride=1, padding=1, output_padding=1, bn=True,scale_factor=2, dilation=1):
+    """Transpose convolution + BatchNorm + ReLU"""
+    if bn:
+        layers= nn.Sequential(
+            nn.Upsample(scale_factor=scale_factor, mode="nearest" ),
+            nn.Conv2d( in_channels=in_channels, out_channels=in_channels, kernel_size=kernel_size, stride=stride, padding=padding, dilation=dilation),
+            nn.ReLU(inplace=True),
+            nn.InstanceNorm2d(out_channels),
+            nn.Conv2d( in_channels=in_channels, out_channels=out_channels, kernel_size=kernel_size, stride=1, padding=1, dilation=1),
+            nn.ReLU(inplace=True),
+            nn.InstanceNorm2d(out_channels)
+            #nn.BatchNorm2d(out_channels,momentum=0.9)
+        )
+    else:
+        layers= nn.Sequential(
+            nn.ConvTranspose2d(in_channels, out_channels, kernel_size=kernel_size, stride=stride, padding=padding, output_padding=output_padding, bias=True),
+        )
+    for m in layers.modules():
+        init_weights(m)
+    return layers
+
+class deconv3x3_relu_no_artifacts_class(nn.Module):
+    
+    def __init__(self,in_channels, out_channels, kernel_size=3, stride=1, padding=1, output_padding=1, relu=True,scale_factor=2, dilation=1) -> None:
+        super(deconv3x3_relu_no_artifacts_class, self).__init__()
+        if relu:
+            self.layers= nn.Sequential(
+            nn.Upsample(scale_factor=scale_factor, mode="nearest"),
+            nn.Conv2d( in_channels=in_channels, out_channels=in_channels, kernel_size=kernel_size, stride=stride, padding=padding, dilation=dilation),
+            nn.ReLU(inplace=True),
+            #nn.InstanceNorm2d(out_channels),
+            nn.Conv2d( in_channels=in_channels, out_channels=out_channels, kernel_size=kernel_size, stride=1, padding=1, dilation=1),
+            nn.ReLU(inplace=True),
+            #nn.InstanceNorm2d(out_channels)
+            #nn.BatchNorm2d(out_channels,momentum=0.9)
+        )
+        else:
+            self.layers= nn.Sequential(
+                #nn.ConvTranspose2d(in_channels, out_channels, kernel_size=kernel_size, stride=stride, padding=padding, output_padding=0, bias=True),
+                nn.Conv2d( in_channels=in_channels, out_channels=out_channels, kernel_size=kernel_size, stride=1, padding=1, dilation=1),
+                #nn.AdaptiveAvgPool2d((512,512))
+            )
+        for m in self.layers.modules():
+            init_weights(m)
+            
+    def forward(self, input):
+        return self.layers(input)
+
+
+
+
+
+
+
+
+
+def deconv3x3_relu_no_artifacts(in_channels, out_channels, kernel_size=3, stride=1, padding=1, output_padding=1, relu=True,scale_factor=2, dilation=1):
+    """Transpose convolution + BatchNorm + ReLU"""
+    if relu:
+        layers= nn.Sequential(
+            nn.Upsample(scale_factor=scale_factor, mode="nearest"),
+            nn.Conv2d( in_channels=in_channels, out_channels=in_channels, kernel_size=kernel_size, stride=stride, padding=padding, dilation=dilation),
+            nn.ReLU(inplace=True),
+            #nn.InstanceNorm2d(out_channels),
+            nn.Conv2d( in_channels=in_channels, out_channels=out_channels, kernel_size=kernel_size, stride=1, padding=1, dilation=1),
+            nn.ReLU(inplace=True),
+            #nn.InstanceNorm2d(out_channels)
+            #nn.BatchNorm2d(out_channels,momentum=0.9)
+        )
+    else:
+        layers= nn.Sequential(
+            #nn.ConvTranspose2d(in_channels, out_channels, kernel_size=kernel_size, stride=stride, padding=padding, output_padding=0, bias=True),
+            nn.Conv2d( in_channels=in_channels, out_channels=out_channels, kernel_size=kernel_size, stride=1, padding=1, dilation=1),
+            #nn.AdaptiveAvgPool2d((512,512))
+        )
+    for m in layers.modules():
+        init_weights(m)
+    return layers
+
+
+
 
 
 class PartialConv2d(nn.Conv2d):
@@ -212,20 +308,26 @@ class ResNetBlock(nn.Module):
     This class represents a basic extraction block based on conv_layers + batchnorm + ReLU.
     It is implemented following ResNet architecture
     """
-    def __init__(self, in_channels, out_channels, stride=1,downsample=None,dilation=1):
+    def __init__(self, in_channels, out_channels, stride=1,downsample=None,dilation=1,batch=True):
         super(ResNetBlock, self).__init__()
+        self.batch=batch
         #First extraction layer
         #self.ext1=conv3x3_bn_relu(in_channels=in_channels, out_channels=out_channels, stride=stride)
         self.conv1= conv3x3(in_channels, out_channels, stride,dilation=dilation)
-        self.bn1=nn.BatchNorm2d(out_channels,momentum=0.9)
+        self.bn1=nn.BatchNorm2d(out_channels)
         #Second extraction layer
         self.conv2 = conv3x3(out_channels, out_channels,dilation=dilation) #in_channels=out_channels
-        self.bn2 = nn.BatchNorm2d(out_channels,momentum=0.9)
+        self.bn2 = nn.BatchNorm2d(out_channels)
         if stride != 1 or in_channels != out_channels:
-            downsample = nn.Sequential(
+            if batch:
+                downsample = nn.Sequential(
+                    conv1x1(in_channels, out_channels, stride),
+                    nn.BatchNorm2d(out_channels),
+                )
+            else:
+                downsample = nn.Sequential(
                 conv1x1(in_channels, out_channels, stride),
-                nn.BatchNorm2d(out_channels,momentum=0.9),
-            )
+            )    
             init_weights(downsample)
         self.downsample = downsample
         self.relu=nn.ReLU(inplace=True)
@@ -238,10 +340,12 @@ class ResNetBlock(nn.Module):
     def forward(self, x):
         #out=self.ext1(x)
         out=self.conv1(x)
-        out=self.bn1(out)
+        if self.batch:
+            out=self.bn1(out)
         out=self.relu(out)
         out=self.conv2(out)
-        out=self.bn2(out)
+        if self.batch:
+            out=self.bn2(out)
         if self.downsample is not None:
             x = self.downsample(x)
         out+=x
@@ -460,10 +564,14 @@ class ResidualBlock(nn.Module):
         self.skip_layer = nn.Conv2d(inp_dim,
                                out_dim, 
                                1,padding=(1-1)//2)
+
+        modules=[self.relu, self.bn1, self.conv1, self.bn2, self.bn2, self.conv3, self.skip_layer]
         if inp_dim == out_dim:
             self.need_skip = False
         else:
             self.need_skip = True
+        for m in modules:
+            init_weights(m)
         
     def forward(self, x):
         if self.need_skip:
@@ -503,7 +611,8 @@ class HourglassModule(nn.Module):
             self.low2 = ResidualBlock(nf, nf)
         self.low3 = ResidualBlock(nf, f)
         self.up2 = nn.Upsample(scale_factor=2, mode='nearest')
-
+        
+        
     def forward(self, x):
         up1  = self.up1(x)
         pool1 = self.pool1(x)
@@ -512,3 +621,57 @@ class HourglassModule(nn.Module):
         low3 = self.low3(low2)
         up2  = self.up2(low3)
         return up1 + up2
+
+
+
+
+###################################################
+#    This is from the Fast.ai implementation      #
+#    consult to fix convlayer and NormType        #
+# https://github.com/fastai/fastai/blob/f91e058f500fdcebb9af74654bf14a2edc430cc0/fastai/layers.py#L237 #
+###################################################
+class SelfAttention(nn.Module):
+    "Self attention layer for `n_channels`."
+    def __init__(self, n_channels):
+        super(SelfAttention, self).__init__()
+        self.query,self.key,self.value = [self._conv(n_channels, c) for c in (n_channels//8,n_channels//8,n_channels)]
+        self.gamma = nn.Parameter(torch.Tensor([0.]))
+
+    def _conv(self,n_in,n_out):
+        #return ConvLayer(n_in, n_out, ks=1, ndim=1, norm_type=NormType.Spectral, act_cls=None, bias=False)
+        return conv3x3_bn_relu(n_in, n_out,kernel_size=1)
+
+    def forward(self, x):
+        #Notation from the paper.
+        size = x.size()
+        x = x.view(*size[:2],-1)
+        f,g,h = self.query(x),self.key(x),self.value(x)
+        beta = F.softmax(torch.bmm(f.transpose(1,2), g), dim=1)
+        o = self.gamma * torch.bmm(h, beta) + x
+        return o.view(*size).contiguous()
+    
+class DIYSelfAttention(nn.Module):
+    def __init__(self,channels):
+        super(DIYSelfAttention, self).__init__()
+        
+        self.conv1_0=conv1x1(channels, channels)
+        self.conv1_1=conv1x1(channels, channels)
+        self.conv1_2=conv1x1(channels, channels)
+        
+        self.softmax=nn.Softmax(1)
+        
+        self.conv2=conv1x1(channels,channels)
+        
+        modules=[self.conv1_0,self.conv1_1,self.conv1_2,self.conv2]
+        for m in modules:
+            init_weights(m)
+        
+    def forward(self, x):
+       x1=self.conv1_0(x)
+       x2=self.conv1_1(x)
+       x3=self.conv1_2(x)
+       
+       joint1=self.softmax(x1*x2)
+       joint2=joint1*x3
+       
+       return self.conv2(joint2)

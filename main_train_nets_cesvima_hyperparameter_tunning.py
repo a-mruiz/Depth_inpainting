@@ -28,23 +28,29 @@ import os
 
 
 sys.path.append("/media/beegfs/home/t588/t588188/.local/lib/python3.9/site-packages") 
-cuda = torch.cuda.is_available()
-if cuda:
-    import torch.backends.cudnn as cudnn
-    #cudnn.benchmark = True
-    device = torch.device("cuda")
-else:
-    device = torch.device("cpu")
-print("===> Using '{}' for computation.".format(device))
+
 
 
 def main():
+    
+    cuda = torch.cuda.is_available()
+    if cuda:
+        import torch.backends.cudnn as cudnn
+        #cudnn.benchmark = True
+        device = torch.device("cuda")
+    else:
+        device = torch.device("cpu")
+    print("===> Using '{}' for computation.".format(device))
+    
+    
+    
+    
     
     train_or_test = "train"
     
     print("===> Starting framework...")
     """Some parameters for the model"""
-    #weight_decay = 1e-06
+    weight_decay = 1e-07
     epochs = 15
     
     #parameters_to_test = dict(
@@ -54,26 +60,33 @@ def main():
     #)
     
     parameters_to_test = dict(
-        lr = [0.01,0.001,0.0001],
-        batch_size = [1,8,16],
-        low_beta = [0.7,0.9],
-        loss_fun=["L1","BerHuLoss","L2","CombinedNew"],
-        models=["TwoBranch_newModel","TwoBranch_newModel_in","TwoBranch_newModel_bn"]
+        lr = [0.001],
+        batch_size = [1],
+        low_beta = [0.7],
+        loss_fun=["CombinedNew"],
+        models=["SelfAttentionModel"],
+        selfAttentionLayers=[1,2,4],
+        deconvLayers=[1,2,3],
+        attentionChannels=[32,64,128]
     )
     
     param_values = [v for v in parameters_to_test.values()]
     
-    for run_id, (lr,batch_size, low_beta,loss_fun,m) in enumerate(product(*param_values)):
+    for run_id, (lr,batch_size, low_beta,loss_fun,m,attLayers,deconvLayers,attChannels) in enumerate(product(*param_values)):
         if m=="TwoBranch_newModel":
             model=models.TwoBranch_newModel()
         if m=="TwoBranch_newModel_in":
             model=models.TwoBranch_newModel_in()
         if m=="TwoBranch_newModel_bn":
             model=models.TwoBranch_newModel_bn()
-        
+        if m=="SelfAttentionModel":
+            model=models.SelfAttentionModel(attentionChannels=attChannels,attLayers=attLayers,deconvLayers=deconvLayers)
+            
+            
         model=nn.DataParallel(model)
-        if torch.cuda.is_available():
-            model.cuda()
+        model.to(device)
+            
+            
         pre_depth=True
         aug=True        
         
@@ -83,17 +96,17 @@ def main():
             dataset,
             batch_size=batch_size,
             shuffle=True,
-            num_workers=8,
+            num_workers=14,
             pin_memory=True,
             sampler=None)
         test_dataloader = torch.utils.data.DataLoader(
             dataset_test,
             batch_size=1,
             shuffle=False,
-            num_workers=8,
+            num_workers=14,
             pin_memory=True,
             sampler=None)
-        optimizer = torch.optim.Adam(model.parameters(), lr=lr,eps=1e-07, betas=(low_beta, 0.99),weight_decay=0)
+        optimizer = torch.optim.Adam(model.parameters(), lr=lr,eps=1e-07, betas=(low_beta, 0.99),weight_decay=weight_decay)
         criterion = loss_fun
         if loss_fun=="CombinedLoss":
             criterion=losses.CombinedLoss()
@@ -105,13 +118,15 @@ def main():
             criterion=losses.MaskedMSELoss()
         if loss_fun=="CombinedNew":
             criterion=losses.CombinedNew()
-        comment = f'model={m} batch_size = {batch_size} lr = {lr} low_beta = {low_beta} Loss_fun = {loss_fun}'
-        writer = SummaryWriter(log_dir="runs/NORMAL_MODEL/",comment=comment)
+            
+        comment = f'model={m} batch_size = {batch_size} lr = {lr} low_beta = {low_beta} Loss_fun = {loss_fun} AttLayers = {attLayers} AttChannels = {attChannels} DeconvLayers = {deconvLayers}'
+        writer = SummaryWriter(log_dir="runs/ATT_MODEL",comment=comment)
+        print(comment)
         
         total_loss_val=0
         total_loss_mse=0
         for epoch in range(epochs):
-            print("------------EPOCH ("+str(epoch+1) +") of ("+str(epochs)+")------------")
+            #print("------------EPOCH ("+str(epoch+1) +") of ("+str(epochs)+")------------")
             
             model.train()
             running_loss = 0.0
@@ -181,7 +196,7 @@ def main():
             writer.add_scalar("Val MSE - EPOCH", total_mse_val, epoch)
             
         writer.add_hparams(
-            {"lr": lr, "bsize": batch_size, "low_beta":low_beta,"loss_fun":loss_fun,"model":m},
+            {"lr": lr, "bsize": batch_size, "low_beta":low_beta,"loss_fun":loss_fun,"model":m,"attChannels":attChannels,"attLayers":attLayers,"deconvLayers":deconvLayers},
             {
                 "PNSR_val": total_psnr_val,
                 "loss_val": total_loss_val,

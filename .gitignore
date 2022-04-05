@@ -3,6 +3,7 @@
 
 #No data training
 data_middlebury/
+data_gdem/
 
 #No outputs from training
 outputs/
@@ -16,3 +17,6 @@ results/
 
 #ignore cesvima out files
 slurm-*
+
+#ignore __pycache__
+__pycache__/

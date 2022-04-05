@@ -36,12 +36,11 @@ def main():
     deactivate_logger=True
 
     
-    
     print("===> Starting framework...")
     """Some parameters for the model"""
-    lr = 0.01
-    weight_decay = 1e-06
-    epochs = 15
+    lr = 0.001
+    weight_decay = 1e-07
+    epochs = 30
     params = {"mode": train_or_test, "lr": lr,
               "weight_decay": weight_decay, "epochs": epochs,
               "bs":1}
@@ -49,18 +48,15 @@ def main():
     """#1. Load the model"""
     print("===> Loading model...")
     
-    model = models.HourGlassNetwork()
-    model_option = "HourGlassNetwork"
+    model = models.SelfAttentionModel(attLayers=4,deconvLayers=3,attentionChannels=32)
+    model_option = "SelfAttentionModel"
     params['model']=model_option
     
-    writer = SummaryWriter(comment=f'')
+    writer = SummaryWriter(log_dir="runs/FAILED/",comment=f'')
     
-    if torch.cuda.is_available():
-        model.cuda()
+    model.to(device)
     """#2. Dataloaders"""
     print("===> Configuring Dataloaders...")
-    #option = int(
-    #    input("Which dataset do you want to use?:\n\t-1=Bosch\n\t-2=GDEM\n"))
 
     dataset = MiddleburyDataLoader('train', augment=True, preprocess_depth=False)
     dataset_test = MiddleburyDataLoader('test', augment=False, preprocess_depth=False)
@@ -71,19 +67,18 @@ def main():
         dataset,
         batch_size=params['bs'],
         shuffle=True,
-        num_workers=8,
+        num_workers=10,
         pin_memory=True,
         sampler=None)
     test_dataloader = torch.utils.data.DataLoader(
         dataset_test,
         batch_size=1,
         shuffle=False,
-        num_workers=8,
+        num_workers=10,
         pin_memory=True,
         sampler=None)
 
     # If needed to run in multiple GPUs, use--->DistributedDataParallel
-
 
     """#3. Create optimizer and criterion"""
     print("===> Creating optimizer and criterion...")
@@ -93,10 +88,7 @@ def main():
     optimizer = torch.optim.Adam(
         model_named_params, lr=lr, weight_decay=weight_decay, betas=(0.9, 0.99))
 
-
-    #optimizer = torch.optim.SGD(model.parameters(), lr=lr, momentum=0.9)
-
-    criterion = losses.CombinedLoss()
+    criterion = losses.CombinedNew()
 
     """#4. If no errors-> Create Logger object to backup code and log training"""
     logger = Logger(params,deactivate=deactivate_logger)

@@ -1,25 +1,17 @@
 #!/bin/bash
 ##----------------------- Start job description -----------------------
 #SBATCH --partition=standard-gpu
-#SBATCH --job-name=TrainNet
+#SBATCH --job-name=HParams
 #SBATCH --ntasks=1
-#SBATCH --ntasks-per-node=10
+#SBATCH --ntasks-per-node=16
 #SBATCH --cpus-per-task=1
-#SBATCH --mem=16G
+#SBATCH --mem=40G
 #SBATCH --mail-user=a.mruiz@upm.es
 #SBATCH --mail-type=ALL
-#SBATCH --time=1:00:00
-#SBATCH --gres=gpu:a100:1
+#SBATCH --time=128:00:00
+#SBATCH --gres=gpu:a100:2
 ##------------------------ End job description ------------------------
 
 #module purge && module load Python
 
-#srun python3 test_net_gdem_data.py
-
-srun python3 main_train_new.py
-
-#srun python3 ExploreDatasetParameters.py
-
-#srun python3 test_transfer_learning.py
-
-#srun python3 test_quantization.py
+srun python3 main_train_new_raytune.py

@@ -8,7 +8,7 @@ import torch.nn.functional as F
 import numpy as np
 import imageio
 import helpers.losses as losses
-
+from helpers import graph_utils
 
 def train_model(model, epochs, params, optimizer, logger, loader, loader_val, criterion, device, lr_scheduler,writer):
     """
@@ -17,17 +17,35 @@ def train_model(model, epochs, params, optimizer, logger, loader, loader_val, cr
 
     # Empty cache on the GPU...just in case some more Mb appear
     
-    val_psnr=0
+    latest_psnr=0
+    
+    val_psnr=[]
+    val_loss=[]
+    val_mse=[]
+    
+    train_psnr=[]
+    train_loss=[]
+    train_mse=[]
 
+    folder_output="outputs/val/Self_4dec/"
+    
+        
     for epoch in range(epochs):
         torch.cuda.empty_cache()
         print("------------EPOCH ("+str(epoch+1) +") of ("+str(epochs)+")------------")
-        losses_batch, psnr_batch, gpu_time = train_one_epoch(
+        losses_batch, psnr_batch, gpu_time, mse_batch = train_one_epoch(
             model, optimizer, loader, criterion, logger, epoch,device,writer)
 
-        """log all the training!!!"""
-        writer.add_scalar("Train Loss- EPOCH", sum(losses_batch)/len(losses_batch))
-        writer.add_scalar("Train PSNR(dB)- EPOCH", -sum(psnr_batch)/len(psnr_batch))
+        
+        #Log the losses so that training graphs can be generated 
+        
+        train_loss.append(losses_batch)
+        train_psnr.append(psnr_batch)
+        train_mse.append(mse_batch)
+        
+        #"""log all the training!!!"""
+        #writer.add_scalar("Train Loss- EPOCH", sum(losses_batch)/len(losses_batch))
+        #writer.add_scalar("Train PSNR(dB)- EPOCH", -sum(psnr_batch)/len(psnr_batch))
         print("end epoch")
         
         #Starting evaluation routine
@@ -35,36 +53,53 @@ def train_model(model, epochs, params, optimizer, logger, loader, loader_val, cr
             model.eval()
             val_losses=[]
             val_psnrs=[]
+            val_mses=[]
+            mse_loss=losses.MaskedMSELoss()
             for i,batch_data in enumerate(loader_val):
                 batch_data = {
                     key: val.to(device) for key, val in batch_data.items() if val is not None
                 }
                 output=model(batch_data)
-                        
-                #print(f"\nLimits Output Depth low ({torch.min(output)} and high ({torch.max(output)}))")
-                #print(f"Limits Output GT low ({torch.min(batch_data['gt'])} and high ({torch.max(batch_data['gt'])}))")
+
+                print(f"\nLimits Output Depth low ({torch.min(output)} and high ({torch.max(output)}))")
+                print(f"Limits Output GT low ({torch.min(batch_data['gt'])} and high ({torch.max(batch_data['gt'])}))")
                 val_current_loss = criterion(output, batch_data['gt']).item()
                 val_current_psnr = losses.psnr_loss(output, batch_data['gt']).item()
+                val_current_mse = mse_loss(output, batch_data['gt']).item()
                 val_losses.append(val_current_loss)
                 val_psnrs.append(val_current_psnr)
-                save_result_row(batch_data, output, "out_"+str(epoch)+".png", folder="outputs/val/test/")
-
-            mean_loss_batch = sum(losses_batch)/len(losses_batch)
-            mean_psnr_batch = sum(psnr_batch)/len(psnr_batch)
+                val_mses.append(val_current_mse)
+                save_result_row(batch_data, output, "out_"+str(epoch)+"_"+str(i)+".png", folder=folder_output)
 
             val_mean_loss= sum(val_losses)/len(val_losses)
             val_mean_psnr= sum(val_psnrs)/len(val_psnrs)
-            writer.add_scalar("Val Loss- EPOCH", sum(losses_batch)/len(losses_batch))
-            writer.add_scalar("Val PSNR(dB)- EPOCH", -sum(psnr_batch)/len(psnr_batch))
-            logger.logToFile(epoch, mean_loss_batch, -mean_psnr_batch, gpu_time)
+            val_mean_mse= sum(val_mses)/len(val_mses)
+            
+            val_loss.append(val_mean_loss)
+            val_mse.append(val_mean_mse)
+            val_psnr.append(-val_mean_psnr)
+            
+            #writer.add_scalar("Val Loss- EPOCH", sum(losses_batch)/len(losses_batch))
+            #writer.add_scalar("Val PSNR(dB)- EPOCH", -sum(psnr_batch)/len(psnr_batch))
+            logger.logToFile(epoch, losses_batch, -psnr_batch, gpu_time)
             logger.logToFile(epoch, val_mean_loss, -val_mean_psnr, gpu_time, False)
-            if -val_mean_psnr>val_psnr:
-                val_psnr=val_mean_psnr
+            if -val_mean_psnr>latest_psnr:
+                latest_psnr=val_mean_psnr
                 #torch.save(model.state_dict(), logger.backup_directory+"/model_best.pth")
-                print(val_psnr)
-        #prof.step()
-        #lr_scheduler(mean_loss_batch)
+                print(latest_psnr)
+            
+        lr_scheduler(losses_batch)
     
+    y_ticker=(max(train_loss)-min(train_loss))/10
+    
+    y_ticker_mse=(max(train_mse)-min(train_mse))/10
+    
+    graph_utils.make_graph([train_loss, val_loss], ['train', 'val'], range(0,len(train_loss)), title="Loss values train&test", x_label="epochs",
+                        y_label="Loss", x_lim_low=0, x_lim_high=len(train_loss), show=False, subtitle="", output_dir=folder_output,x_ticker=5,y_ticker=y_ticker)
+    graph_utils.make_graph([train_psnr, val_psnr], ['train', 'val'], range(0,len(val_psnr)), title="PSNR values train&test", x_label="epochs",
+                y_label="PSNR(dB)", x_lim_low=0, x_lim_high=len(train_psnr), show=False, subtitle="", output_dir=folder_output,x_ticker=5)
+    graph_utils.make_graph([train_mse, val_mse], ['train', 'val'], range(0,len(val_psnr)), title="MSE loss values train&test", x_label="epochs",
+                y_label="MSE", x_lim_low=0, x_lim_high=len(train_psnr), show=False, subtitle="", output_dir=folder_output,x_ticker=5,y_ticker=y_ticker_mse)
 
 
 
@@ -78,6 +113,8 @@ def train_one_epoch(model, optimizer, loader, criterion, logger, epoch,device,wr
     counter = 0
     loss_batch = []
     psnr_batch = []
+    mse_batch = []
+    mse_loss=losses.MaskedMSELoss()
     for i, batch_data in enumerate(t):
         data_start = time.time()
         batch_data = {
@@ -99,16 +136,19 @@ def train_one_epoch(model, optimizer, loader, criterion, logger, epoch,device,wr
         current_loss = loss.item()
         loss_batch.append(current_loss)
 
-        current_psnr = losses.psnr_loss(output, batch_data['gt']).item()
+        current_psnr = -losses.psnr_loss(output, batch_data['gt']).item()
         psnr_batch.append(current_psnr)
+        
+        current_mse=mse_loss(output, batch_data["gt"]).item()
+        mse_batch.append(current_mse)
 
         running_loss += current_loss
         counter += 1
         t.set_postfix(loss=current_loss)
-        writer.add_scalar("Train Loss- LOOP", current_loss)
-        writer.add_scalar("Train PSNR(dB)- LOOP", -current_psnr)
+        #writer.add_scalar("Train Loss- LOOP", current_loss)
+        #writer.add_scalar("Train PSNR(dB)- LOOP", -current_psnr)
         
-    return loss_batch, psnr_batch, gpu_time
+    return sum(loss_batch)/len(loss_batch), sum(psnr_batch)/len(psnr_batch), gpu_time,sum(mse_batch)/len(mse_batch)
 
 
 def test_model(model, loader, criterion, logger, device, folder="outputs/"):
