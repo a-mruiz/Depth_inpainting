@@ -3,13 +3,13 @@
 #SBATCH --partition=standard-gpu
 #SBATCH --job-name=pix2pix
 #SBATCH --ntasks=1
-#SBATCH --ntasks-per-node=2
+#SBATCH --ntasks-per-node=10
 #SBATCH --cpus-per-task=1
-#SBATCH --mem=8G
+#SBATCH --mem=20G
 #SBATCH --mail-user=a.mruiz@upm.es
 #SBATCH --mail-type=ALL
 #SBATCH --time=24:00:00
-#SBATCH --gres=gpu:v100:1
+#SBATCH --gres=gpu:a100:1
 ##------------------------ End job description ------------------------
 
 #module purge && module load Python

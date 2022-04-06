@@ -120,7 +120,7 @@ class GdemDataLoader(data.Dataset):
     def __getraw__(self, index):
         rgb, gray = read_rgb(self.paths['rgb'][index]) if (
             self.paths['rgb'][index] is not None) else None
-        depth = read_depth(self.paths['d'][index], True) if (
+        depth = read_depth(self.paths['d'][index], False) if (
             self.paths['d'][index] is not None) else None
         gt = read_depth(self.paths['gt'][index]) if (
             self.paths['gt'][index] is not None) else None
@@ -128,15 +128,17 @@ class GdemDataLoader(data.Dataset):
 
     def __getitem__(self, index):
         rgb, gray, sparse, gt = self.__getraw__(index)
-        resize=transforms.Resize((704,1280))
+        resize=transforms.Resize((1024,1024))
         
         preprocess_rgb=transforms.Compose([
-            transforms.Resize((704,1280)),
-            transforms.Normalize(mean=[0.4409, 0.4570, 0.3751], std=[0.2676, 0.2132, 0.2345])          
+            transforms.Resize((1024,1024)),
+            #transforms.Normalize(mean=[0.4409, 0.4570, 0.3751], std=[0.2676, 0.2132, 0.2345])         
+            transforms.Normalize(mean=[0,0,0], std=[1,1,1]) 
         ])
         preprocess_depth=transforms.Compose([
-            transforms.Resize((704,1280)),
-            transforms.Normalize(mean=[0.2674], std=[0.1949])          
+            transforms.Resize((1024,1024)),
+            #transforms.Normalize(mean=[0.2674], std=[0.1949])
+            transforms.Normalize(mean=[0], std=[1])          
         ])
         
         rgb=ToTensor(rgb).float()/255

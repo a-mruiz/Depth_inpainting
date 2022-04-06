@@ -27,7 +27,7 @@ def train_model(model, epochs, params, optimizer, logger, loader, loader_val, cr
     train_loss=[]
     train_mse=[]
 
-    folder_output="outputs/val/Self_4dec/"
+    folder_output="outputs/val/inceptionandatt/"
     
         
     for epoch in range(epochs):
@@ -72,20 +72,20 @@ def train_model(model, epochs, params, optimizer, logger, loader, loader_val, cr
                 save_result_row(batch_data, output, "out_"+str(epoch)+"_"+str(i)+".png", folder=folder_output)
 
             val_mean_loss= sum(val_losses)/len(val_losses)
-            val_mean_psnr= sum(val_psnrs)/len(val_psnrs)
+            val_mean_psnr= -sum(val_psnrs)/len(val_psnrs)
             val_mean_mse= sum(val_mses)/len(val_mses)
             
             val_loss.append(val_mean_loss)
             val_mse.append(val_mean_mse)
-            val_psnr.append(-val_mean_psnr)
+            val_psnr.append(val_mean_psnr)
             
             #writer.add_scalar("Val Loss- EPOCH", sum(losses_batch)/len(losses_batch))
             #writer.add_scalar("Val PSNR(dB)- EPOCH", -sum(psnr_batch)/len(psnr_batch))
             logger.logToFile(epoch, losses_batch, -psnr_batch, gpu_time)
-            logger.logToFile(epoch, val_mean_loss, -val_mean_psnr, gpu_time, False)
-            if -val_mean_psnr>latest_psnr:
+            logger.logToFile(epoch, val_mean_loss, val_mean_psnr, gpu_time, False)
+            if val_mean_psnr>latest_psnr:
                 latest_psnr=val_mean_psnr
-                #torch.save(model.state_dict(), logger.backup_directory+"/model_best.pth")
+                torch.save(model.state_dict(), "model_best.pth")
                 print(latest_psnr)
             
         lr_scheduler(losses_batch)

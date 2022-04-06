@@ -1554,10 +1554,10 @@ class SelfAttentionModel(nn.Module):
         if deconvLayers==1:
             self.dec_1=deconv3x3_relu_no_artifacts(in_channels=attentionChannels, out_channels=1,padding=1, stride=1,output_padding=1, scale_factor=2,relu=False)#B,1,512,1024
         if deconvLayers==2:
-            self.dec_1=deconv3x3_relu_no_artifacts(in_channels=attentionChannels, out_channels=out_channels,padding=1, stride=1,output_padding=2, scale_factor=1)
+            self.dec_1=deconv3x3_relu_no_artifacts(in_channels=attentionChannels, out_channels=out_channels,padding=1, stride=1,output_padding=1, scale_factor=2)
             self.dec_2=deconv3x3_relu_no_artifacts(in_channels=out_channels, out_channels=1,padding=1, stride=1,output_padding=1, scale_factor=1,relu=False)
         if deconvLayers==3:
-            self.dec_1=deconv3x3_relu_no_artifacts(in_channels=attentionChannels, out_channels=out_channels,padding=1, stride=1,output_padding=2, scale_factor=1)
+            self.dec_1=deconv3x3_relu_no_artifacts(in_channels=attentionChannels, out_channels=out_channels,padding=1, stride=1,output_padding=1, scale_factor=2)
             self.dec_2=deconv3x3_relu_no_artifacts(in_channels=out_channels, out_channels=int(out_channels/2),padding=1, stride=1,output_padding=1, scale_factor=1)
             self.dec_3=deconv3x3_relu_no_artifacts(in_channels=int(out_channels/2), out_channels=1,padding=1, stride=1,output_padding=1, scale_factor=1,relu=False)
         if deconvLayers==4:
@@ -1609,29 +1609,83 @@ class SelfAttentionModel(nn.Module):
 
 
 
-class SelfAttentionModelBasic(nn.Module):
-    def __init__(self,attLayers=4,deconvLayers=3,attentionChannels=64):
-        super(SelfAttentionModelBasic, self).__init__()
 
-        if attentionChannels==32:
-            out_channels=16
-        if attentionChannels==64:
-            out_channels=32
-            
+class testceptionBlock(nn.Module):
+    def __init__(self,in_channels, out_channels) -> None:
+        super(testceptionBlock,self).__init__()
+        self.branch1=conv3x3_bn_relu(in_channels,out_channels,kernel_size=1,padding=0)
+        self.branch2_1=conv3x3_bn_relu(in_channels,out_channels,kernel_size=1,padding=0)
+        self.branch2_2=conv3x3_bn_relu(in_channels,out_channels,kernel_size=3)
+        self.branch3_1=conv3x3_bn_relu(in_channels,out_channels,kernel_size=1,padding=0)
+        self.branch3_2=conv3x3_bn_relu(in_channels,out_channels,kernel_size=5,padding=2)
+        self.branch4_1=nn.MaxPool2d(kernel_size=3, stride=1, padding=1, ceil_mode=True)
+        self.branch4_2=conv3x3_bn_relu(in_channels,out_channels,kernel_size=1,padding=0)
+    def forward(self, input):
+        branch1 = self.branch1(input)#[1, 64, 800, 800]
+        #print("Branch 1->"+str(branch1.shape))
+        branch2_1 = self.branch2_1(input)#[1, 64, 800, 800]
+        branch2_2 = self.branch2_2(input)#[1, 64, 800, 800]
+        #print("Branch 2_1->"+str(branch2_1.shape))
+        #print("Branch 2_2->"+str(branch2_2.shape))
+        branch3_1 = self.branch3_1(input)#[1, 64, 800, 800]
+        branch3_2 = self.branch3_2(input)#[1, 64, 800, 800]
+        #print("Branch 3_1->"+str(branch3_1.shape))
+        #print("Branch 3_2->"+str(branch3_2.shape))
+        branch4_1 = self.branch4_1(input)#[1, 64, 800, 800]
+        branch4_2 = self.branch4_2(input)#[1, 64, 800, 800]
+        #print("Branch 4_1->"+str(branch4_1.shape))
+        #print("Branch 4_2->"+str(branch4_2.shape))
+        outputs = [branch1,branch2_2,branch3_2,branch4_2]
+        return torch.cat(outputs,1)
+    
+class inceptionBlock(nn.Module):
+    def __init__(self,in_channels, ch1x1,ch3x3,ch5x5,ch3x3_in,ch5x5_in,pool_proj) -> None:
+        super(inceptionBlock,self).__init__()
+        self.branch1=conv3x3_bn_relu(in_channels,ch1x1,kernel_size=1)
+        self.branch2=nn.Sequential(conv3x3_bn_relu(in_channels,ch3x3_in,kernel_size=1,padding=0),conv3x3_bn_relu(ch3x3_in,ch3x3,kernel_size=3))
+        self.branch3=nn.Sequential(conv3x3_bn_relu(in_channels,ch5x5_in,kernel_size=1,padding=0),conv3x3_bn_relu(ch5x5_in,ch5x5,kernel_size=5))
+        self.branch4=nn.Sequential(nn.MaxPool2d(kernel_size=3, stride=1, padding=1, ceil_mode=True),conv3x3_bn_relu(in_channels,pool_proj,kernel_size=1,padding=0))
+    def forward(self, input):
+        branch1 = self.branch1(input)
+        branch2 = self.branch2(input)
+        branch3 = self.branch3(input)
+        branch4 = self.branch4(input)
+        outputs = [branch1, branch2, branch3, branch4]
+        return torch.cat(outputs,1)
+    
+class inceptionBlock_light(nn.Module):
+    def __init__(self,in_channels, ch1x1,ch3x3,ch5x5,ch3x3_in,ch5x5_in,pool_proj) -> None:
+        super(inceptionBlock_light,self).__init__()
+        self.branch1=conv3x3_bn_relu(in_channels,ch1x1,kernel_size=1,padding=0)
+        self.branch2=nn.Sequential(conv3x3_bn_relu(in_channels,ch3x3_in,kernel_size=1,padding=0),conv3x3_bn_relu(ch3x3_in,ch3x3,kernel_size=3))
+        self.branch3=nn.Sequential(conv3x3_bn_relu(in_channels,ch5x5_in,kernel_size=1,padding=0),conv3x3_bn_relu(ch5x5_in,ch5x5,kernel_size=5,padding=2))
+        self.branch4=nn.Sequential(nn.MaxPool2d(kernel_size=3, stride=1, padding=1, ceil_mode=True),conv3x3_bn_relu(in_channels,pool_proj,kernel_size=1,padding=0))
+    def forward(self, input):
+        branch1 = self.branch1(input)
+        branch2 = self.branch2(input)
+        branch3 = self.branch3(input)
+        outputs = [branch1, branch2, branch3]
+        return torch.cat(outputs,1)
+    
+class InceptionLikeModel(nn.Module):
+    def __init__(self):
+        super(InceptionLikeModel, self).__init__()
+        
         #Encoder RGB
-        self.first_layer_rgb=conv3x3_relu(in_channels=3,kernel_size=3,out_channels=out_channels,stride=1, padding=1)#B,32,256,512
+        self.first_layer_rgb=conv3x3_relu(in_channels=3,kernel_size=3,out_channels=32,stride=2, padding=1)#B,32,800,800
         #Encoder Depth
-        self.first_layer_depth=conv3x3_relu(in_channels=1,kernel_size=3,out_channels=out_channels,stride=1, padding=1)#B,16,516,1028
+        self.first_layer_depth=conv3x3_relu(in_channels=1,kernel_size=3,out_channels=32,stride=2, padding=1)#B,32,800,800
+        
+        self.conv_intermediate=conv3x3_relu(in_channels=64,kernel_size=3,out_channels=64,stride=2, padding=1)
         
         
-        self.att_1=DIYSelfAttention(attentionChannels)
-      
-        self.modules_deconv=[]    
-        self.dec_1=deconv3x3_relu_no_artifacts(in_channels=attentionChannels, out_channels=1,padding=1, stride=1,output_padding=1, scale_factor=1,relu=False)
+        self.inception_1=inceptionBlock_light(in_channels=64,ch1x1=32,ch3x3=64,ch5x5=32,ch3x3_in=32,ch5x5_in=16)
+        self.inception_2=inceptionBlock_light(in_channels=128,ch1x1=64,ch3x3=128,ch5x5=64,ch3x3_in=64,ch5x5_in=32) #256
 
-        self.modules_deconv.append(deconv3x3_relu_no_artifacts_class(in_channels=attentionChannels, out_channels=1,padding=1, stride=1,output_padding=1, scale_factor=1,relu=False))
-
-            
+        self.dec_1=deconv3x3_relu_no_artifacts(in_channels=256, out_channels=128,padding=1, stride=1,output_padding=1, scale_factor=2)
+        self.dec_2=deconv3x3_relu_no_artifacts(in_channels=128, out_channels=64,padding=1, stride=1,output_padding=1, scale_factor=2)
+        self.dec_3=deconv3x3_relu_no_artifacts(in_channels=64, out_channels=1,padding=1, stride=1,output_padding=1, scale_factor=1,relu=False)
+           
         self.final_sigmoid=nn.Sigmoid()
         
     def forward(self,input):
@@ -1639,22 +1693,144 @@ class SelfAttentionModelBasic(nn.Module):
         gray = input['g']
         d = input['d']
 
-        #Rgb branch
+        #init branch
         encoder_feature_init_rgb=self.first_layer_rgb(rgb)
-
         encoder_feature_init_depth=self.first_layer_depth(d)
-
+        #print("RGB_I->"+str(encoder_feature_init_rgb.shape))
+        #print("Depth_I->"+str(encoder_feature_init_depth.shape))
         #Join both representations
         out=torch.cat((encoder_feature_init_rgb,encoder_feature_init_depth),1)
-        #print("Joint imgs->"+str(encoder_final_joint.shape))
+        out=self.conv_intermediate(out)
+        out=self.inception_1(out)
+        #print("INCEPTION OUTPUT 1->"+str(out.shape))
+        out=self.inception_2(out)
+        #print("INCEPTION OUTPUT 2->"+str(out.shape))    
+        #Decoder
+        out=self.dec_1(out)
+        out=self.dec_2(out)
+        out=self.dec_3(out)
+        return self.final_sigmoid(out) 
+
+
+class InceptionAndAttentionModel(nn.Module):
+    def __init__(self):
+        super(InceptionAndAttentionModel, self).__init__()
+        
+        #Encoder RGB
+        self.first_layer_rgb=conv3x3_relu(in_channels=3,kernel_size=3,out_channels=32,stride=2, padding=1)#B,32,800,800
+        #Encoder Depth
+        self.first_layer_depth=conv3x3_relu(in_channels=1,kernel_size=3,out_channels=32,stride=2, padding=1)#B,32,800,800
+             
+        self.conv_intermediate=conv3x3_relu(in_channels=64,kernel_size=3,out_channels=64,stride=2, padding=1)
+        
+        self.inception_1=inceptionBlock_light(in_channels=64,ch1x1=32,ch3x3=64,ch5x5=32,ch3x3_in=32,ch5x5_in=16,pool_proj=32) #128
+        #self.inception_2=inceptionBlock_light(in_channels=128,ch1x1=64,ch3x3=128,ch5x5=64,ch3x3_in=64,ch5x5_in=32) #256
+        self.conv_intermediate_2=conv3x3_relu(in_channels=128,kernel_size=3,out_channels=256,stride=2, padding=1)
+        
+        self.att_1=DIYSelfAttention(256)
+        
+        self.conv_intermediate_3=deconv3x3_relu_no_artifacts(in_channels=256, out_channels=128,padding=1, stride=1,output_padding=1, scale_factor=1)
+        
+        self.inception_2=inceptionBlock_light(in_channels=128,ch1x1=64,ch3x3=128,ch5x5=64,ch3x3_in=64,ch5x5_in=32,pool_proj=64) #256
+        
+        self.dec_1=deconv3x3_relu_no_artifacts(in_channels=256, out_channels=128,padding=1, stride=1,output_padding=1, scale_factor=2)
+        self.dec_2=deconv3x3_relu_no_artifacts(in_channels=128, out_channels=64,padding=1, stride=1,output_padding=1, scale_factor=2)
+        self.dec_3=deconv3x3_relu_no_artifacts(in_channels=64, out_channels=64,padding=1, stride=1,output_padding=1, scale_factor=2)
+        self.dec_4=deconv3x3_relu_no_artifacts(in_channels=64, out_channels=1,padding=1, stride=1,output_padding=1, scale_factor=1,relu=False)
+
+        self.dec_5_res=conv1x1(in_channels=1,out_channels=1,bias=True)
+           
+        self.final_sigmoid=nn.Sigmoid()
+        
+    def forward(self,input):
+        rgb = input['rgb']
+        #gray = input['g']
+        d = input['d']
+
+        #init branch
+        encoder_feature_init_rgb=self.first_layer_rgb(rgb)
+        encoder_feature_init_depth=self.first_layer_depth(d)
+        #print("RGB_I->"+str(encoder_feature_init_rgb.shape))
+        #print("Depth_I->"+str(encoder_feature_init_depth.shape))
+        #Join both representations
+        out=torch.cat((encoder_feature_init_rgb,encoder_feature_init_depth),1)
+        out=self.conv_intermediate(out)
+        
+        out=self.inception_1(out)
+        out=self.conv_intermediate_2(out)
         
         out=self.att_1(out)
-            
-        #Decoder
-        #out=self.dec_1(out)
-        for m in self.modules_deconv:
-            out=m(out)
+        out=self.conv_intermediate_3(out)
         
+        out=self.inception_2(out)
+        
+        #Decoder
+        out=self.dec_1(out)
+        out=self.dec_2(out)
+        out=self.dec_3(out)
+        out=self.dec_4(out)
+        out=self.dec_5_res(out)
+        return self.final_sigmoid(out) 
+
+
+class InceptionAndAttentionModel_2(nn.Module):
+    def __init__(self):
+        super(InceptionAndAttentionModel_2, self).__init__()
+        
+        #Encoder RGB
+        self.first_layer_rgb=conv3x3_relu(in_channels=3,kernel_size=3,out_channels=32,stride=2, padding=1)#B,32,800,800
+        #Encoder Depth
+        self.first_layer_depth=conv3x3_relu(in_channels=1,kernel_size=3,out_channels=32,stride=2, padding=1)#B,32,800,800
+             
+        self.conv_intermediate=conv3x3_relu(in_channels=64,kernel_size=3,out_channels=64,stride=2, padding=1)
+        
+        self.inception_1=inceptionBlock_light(in_channels=64,ch1x1=32,ch3x3=64,ch5x5=32,ch3x3_in=32,ch5x5_in=16,pool_proj=32) #128
+        #self.inception_2=inceptionBlock_light(in_channels=128,ch1x1=64,ch3x3=128,ch5x5=64,ch3x3_in=64,ch5x5_in=32) #256
+        self.conv_intermediate_2=conv3x3_relu(in_channels=128,kernel_size=3,out_channels=256,stride=2, padding=1)
+        
+        self.att_1=DIYSelfAttention(256)
+        
+        self.conv_intermediate_3=deconv3x3_relu_no_artifacts(in_channels=256, out_channels=128,padding=1, stride=1,output_padding=1, scale_factor=1)
+        
+        self.inception_2=inceptionBlock_light(in_channels=128,ch1x1=64,ch3x3=128,ch5x5=64,ch3x3_in=64,ch5x5_in=32,pool_proj=64) #256
+        
+        self.dec_1=deconv3x3_relu_no_artifacts(in_channels=256, out_channels=128,padding=1, stride=1,output_padding=1, scale_factor=2)
+        self.dec_2=deconv3x3_relu_no_artifacts(in_channels=128, out_channels=64,padding=1, stride=1,output_padding=1, scale_factor=2)
+        self.dec_3=deconv3x3_relu_no_artifacts(in_channels=64, out_channels=64,padding=1, stride=1,output_padding=1, scale_factor=2)
+        self.dec_4=deconv3x3_relu_no_artifacts(in_channels=64, out_channels=1,padding=1, stride=1,output_padding=1, scale_factor=1,relu=False)
+
+        self.dec_5_res=conv3x3(in_channels=1,out_channels=1,bias=True)
+           
+        self.final_sigmoid=nn.Sigmoid()
+        
+    def forward(self,input):
+        rgb = input['rgb']
+        #gray = input['g']
+        d = input['d']
+
+        #init branch
+        encoder_feature_init_rgb=self.first_layer_rgb(rgb)
+        encoder_feature_init_depth=self.first_layer_depth(d)
+        #print("RGB_I->"+str(encoder_feature_init_rgb.shape))
+        #print("Depth_I->"+str(encoder_feature_init_depth.shape))
+        #Join both representations
+        out=torch.cat((encoder_feature_init_rgb,encoder_feature_init_depth),1)
+        out=self.conv_intermediate(out)
+        
+        out=self.inception_1(out)
+        out=self.conv_intermediate_2(out)
+        
+        out=self.att_1(out)
+        out=self.conv_intermediate_3(out)
+        
+        out=self.inception_2(out)
+        
+        #Decoder
+        out=self.dec_1(out)
+        out=self.dec_2(out)
+        out=self.dec_3(out)
+        out=self.dec_4(out)
+        out=self.dec_5_res(out)
         return self.final_sigmoid(out) 
 
 

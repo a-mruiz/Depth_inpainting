@@ -40,7 +40,7 @@ class DataAugmentation(nn.Module):
         
         hor_flip=aug.RandomHorizontalFlip(p=1,keepdim=True)
         ver_flip=aug.RandomVerticalFlip(p=1,keepdim=True)
-        self.crop=aug.RandomCrop(size=(500,900),keepdim=True)
+        self.crop=aug.RandomCrop(size=size,keepdim=True)
         self.affine=aug.RandomAffine((0.8, 1),(0.8, 1),(0.8, 1), p=1,keepdim=True)
         self.eq=aug.RandomEqualize(p=1)
         self.perspective=aug.RandomPerspective(0.2,p=1, keepdim=True)
@@ -51,7 +51,7 @@ class DataAugmentation(nn.Module):
         
         self.transforms=[hor_flip, self.perspective, self.crop, self.rotation]
         self.transforms=[hor_flip, ver_flip, self.rotation, self.crop_2,self.sharp,self.affine]
-
+        #self.transforms=[self.crop_2]
     @torch.no_grad()  # disable gradients for effiency
     def forward(self, input):
         rgb = input['rgb']
@@ -62,7 +62,7 @@ class DataAugmentation(nn.Module):
         #Apply the transformations with _params to use the same transform
         #on all the images!!!
         for t in self.transforms:
-            if randint(0,10)>6:
+            if randint(0,10)>5:
                 rgb=t(rgb)
                 d=t(d, params=t._params)
                 gt=t(gt, params=t._params)

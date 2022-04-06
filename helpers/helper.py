@@ -41,6 +41,40 @@ def save_image_color(img_merge, filename):
     #print(img_merge)
     cv2.imwrite(filename, img_merge)
 
+def save_test_result(batch_data, output, name,folder="outputs/"):
+    resize=transforms.Resize((1080,1920))
+    unorm_rgb=transforms.Normalize(mean=[0,0,0],std=[1,1,1])
+    unorm_d=transforms.Normalize(mean=[0],std=[1])
+    unorm_gt=transforms.Normalize(mean=[0],std=[1])
+
+    rgb=resize(unorm_rgb(batch_data['rgb'][0, ...]))
+    depth=resize(unorm_d(batch_data['d']))
+    gt=unorm_gt(batch_data['gt'])
+    output=resize(unorm_d(output))
+    
+    
+    img_list=[]
+    
+    rgb = np.squeeze(rgb.data.cpu().numpy())
+    rgb = np.transpose(rgb, (1, 2, 0))*255
+    img_list.append(rgb)
+
+    depth = depth_colorize(np.squeeze(depth.data.cpu().numpy()))
+    #print("DEPTH SIZE--->"+str(depth.shape))
+    img_list.append(depth)
+
+    #print("OUTPUT SIZE BEFORE--->"+str(output.shape))
+    output = depth_colorize(np.squeeze(output.data.cpu().numpy()))
+    #output = np.moveaxis(np.squeeze(output.data.cpu().numpy()),0,2)
+    #print("OUTPUT SIZE--->"+str(output.shape))
+    img_list.append(output)
+    
+    img_merge = np.hstack([img_list[0], img_list[1], img_list[2]])
+    img_merge= img_merge.astype('uint8')
+    save_image_color(img_merge,folder+name)
+    #print("saving img to "+str(folder+name))
+    
+    
 def save_result_row(batch_data, output, name, folder="outputs/"):
     """Will save a row with the different images rgb+depth+gt+output
 
@@ -271,7 +305,7 @@ class LRScheduler():
     by given `factor`.
     """
     def __init__(
-        self, optimizer, patience=5, min_lr=1e-6, factor=0.5
+        self, optimizer, patience=4, min_lr=1e-6, factor=0.5
     ):
         """
         new_lr = old_lr * factor

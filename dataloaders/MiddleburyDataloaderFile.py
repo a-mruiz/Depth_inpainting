@@ -123,14 +123,14 @@ def get_paths(train_or_test, root_path_raytune=None):
 
 
 class MiddleburyDataLoader(data.Dataset):
-    def __init__(self, train_or_test, augment=True, preprocess_depth=False, root_path=None):
+    def __init__(self, train_or_test, augment=True, preprocess_depth=False, root_path=None,h=800,w=800):
         """Inits the MiddleburyDataLoader dataloader
 
         Args:
             train_or_test (string): "train" or "test" to use different data (train and inference)
         """
-        self.h=800
-        self.w=800
+        self.h=h
+        self.w=w
         self.train_or_test = train_or_test
         self.paths = get_paths(train_or_test,root_path_raytune=root_path)
         self.preprocess_depth=preprocess_depth

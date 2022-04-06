@@ -38,7 +38,7 @@ def main():
     
     print("===> Starting framework...")
     """Some parameters for the model"""
-    lr = 0.001
+    lr = 0.0001
     weight_decay = 1e-07
     epochs = 30
     params = {"mode": train_or_test, "lr": lr,
@@ -48,8 +48,8 @@ def main():
     """#1. Load the model"""
     print("===> Loading model...")
     
-    model = models.SelfAttentionModel(attLayers=4,deconvLayers=3,attentionChannels=32)
-    model_option = "SelfAttentionModel"
+    model = models.InceptionAndAttentionModel_2()
+    model_option = "InceptionAndAttentionModel_2"
     params['model']=model_option
     
     writer = SummaryWriter(log_dir="runs/FAILED/",comment=f'')
@@ -58,8 +58,8 @@ def main():
     """#2. Dataloaders"""
     print("===> Configuring Dataloaders...")
 
-    dataset = MiddleburyDataLoader('train', augment=True, preprocess_depth=False)
-    dataset_test = MiddleburyDataLoader('test', augment=False, preprocess_depth=False)
+    dataset = MiddleburyDataLoader('train', augment=True, preprocess_depth=False,h=1024,w=1024)
+    dataset_test = MiddleburyDataLoader('test', augment=False, preprocess_depth=False,h=1024,w=1024)
     dataset_option = "Middlebury"
 
     params['dataset_option'] = dataset_option
@@ -86,7 +86,7 @@ def main():
         p for _, p in model.named_parameters() if p.requires_grad
     ]
     optimizer = torch.optim.Adam(
-        model_named_params, lr=lr, weight_decay=weight_decay, betas=(0.9, 0.99))
+        model_named_params, lr=lr, weight_decay=weight_decay, betas=(0.7, 0.99))
 
     criterion = losses.CombinedNew()
 

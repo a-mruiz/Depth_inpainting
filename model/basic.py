@@ -71,8 +71,8 @@ def conv3x3_bn_relu(in_channels, out_channels, kernel_size=3,stride=1, padding=1
     if bn:
         layers= nn.Sequential(
 	    	nn.Conv2d(in_channels, out_channels, kernel_size=kernel_size, stride=stride, padding=padding, bias=False),
-	    	#nn.BatchNorm2d(out_channels,momentum=0.9),
-            nn.InstanceNorm2d(out_channels),
+	    	#nn.BatchNorm2d(out_channels,eps=0.001),
+            #nn.InstanceNorm2d(out_channels),
 	    	nn.ReLU(inplace=True)
 	    )
     else:

@@ -60,11 +60,9 @@ def main():
     #)
     
     parameters_to_test = dict(
-        lr = [0.001],
-        batch_size = [1],
-        low_beta = [0.7],
-        loss_fun=["CombinedNew"],
-        models=["SelfAttentionModel"],
+        lr = [0.001,0.0005,0.0001],
+        loss_fun=["CombinedNew","CombinedNewBorder"],
+        models=["InceptionAndAttentionModel"],
         selfAttentionLayers=[1,2,4],
         deconvLayers=[1,2,3],
         attentionChannels=[32,64,128]
@@ -72,7 +70,7 @@ def main():
     
     param_values = [v for v in parameters_to_test.values()]
     
-    for run_id, (lr,batch_size, low_beta,loss_fun,m,attLayers,deconvLayers,attChannels) in enumerate(product(*param_values)):
+    for run_id, (lr,loss_fun,m,attLayers,deconvLayers,attChannels) in enumerate(product(*param_values)):
         if m=="TwoBranch_newModel":
             model=models.TwoBranch_newModel()
         if m=="TwoBranch_newModel_in":
@@ -94,7 +92,7 @@ def main():
         dataset_test = MiddleburyDataLoader('test', augment=False, preprocess_depth=False)
         train_dataloader = torch.utils.data.DataLoader(
             dataset,
-            batch_size=batch_size,
+            batch_size=1,
             shuffle=True,
             num_workers=14,
             pin_memory=True,
@@ -106,7 +104,7 @@ def main():
             num_workers=14,
             pin_memory=True,
             sampler=None)
-        optimizer = torch.optim.Adam(model.parameters(), lr=lr,eps=1e-07, betas=(low_beta, 0.99),weight_decay=weight_decay)
+        optimizer = torch.optim.Adam(model.parameters(), lr=lr,eps=1e-07, betas=(0.7, 0.99),weight_decay=weight_decay)
         criterion = loss_fun
         if loss_fun=="CombinedLoss":
             criterion=losses.CombinedLoss()
@@ -119,7 +117,7 @@ def main():
         if loss_fun=="CombinedNew":
             criterion=losses.CombinedNew()
             
-        comment = f'model={m} batch_size = {batch_size} lr = {lr} low_beta = {low_beta} Loss_fun = {loss_fun} AttLayers = {attLayers} AttChannels = {attChannels} DeconvLayers = {deconvLayers}'
+        comment = f'model={m} lr = {lr} Loss_fun = {loss_fun} AttLayers = {attLayers} AttChannels = {attChannels} DeconvLayers = {deconvLayers}'
         writer = SummaryWriter(log_dir="runs/ATT_MODEL",comment=comment)
         print(comment)
         
